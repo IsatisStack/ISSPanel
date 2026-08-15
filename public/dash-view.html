@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" data-theme="light">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>داشبورد</title>
-    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.tailwindcss.com"></script>
-
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet"
+        type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         body {
             font-family: 'Vazirmatn', sans-serif;
@@ -15,104 +16,150 @@
     </style>
 </head>
 
-<body class="bg-gray-900 min-h-screen text-white p-6">
+<body class="">
     <div class="max-w-4xl mx-auto">
-        <div>
-            <img src="./logo.png" alt="" class="mx-auto mb-4 w-64">
-            <div class="flex justify-center gap-4 mb-6">
-                <a href="https://www.youtube.com/@isatisstack" target="_blank" class="rounded-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 block text-center">کانال یوتیوب</a>
-            <a href="https://t.me/isatisstackteam" target="_blank" class="rounded-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 block text-center">کانال تلگرام</a>
+        <div class="flex items-center justify-between gap-4 bg-base-300 rounded my-4 shadow p-2">
+            <div class="flex items-center gap-2">
+                <img src="https://avatars.githubusercontent.com/u/49550675?v=4" alt="" class="w-24 rounded-full">
+                <h1 class="text-2xl font-bold">پنل ساخت کانفیگ ایساتیس استک (v2.0)</h1>
             </div>
-        </div>
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-bold">پنل ساخت کانفیگ ایساتیس استک (v1.0)</h1>
-            <a href="/logout" class="text-red-400 hover:text-red-300">خروج</a>
+            <div class="flex justify-between items-center gap-4">
+
+                <div class="flex justify-center gap-2">
+                    <a href="https://www.youtube.com/@isatisstack" target="_blank"
+                        class="btn btn-error rounded-full">کانال
+                        یوتیوب</a>
+                    <a href="https://t.me/isatisstackteam" target="_blank" class="btn btn-info rounded-full">کانال
+                        تلگرام</a>
+                </div>
+                <a href="/logout" class="btn">خروج</a>
+            </div>
         </div>
 
-        <form id="configForm" class="bg-gray-800 p-6 rounded-lg shadow-lg space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm mb-1">نام کاربری (Remark)</label>
-                    <input type="text" name="username" class="w-full p-2 rounded bg-gray-700 border border-gray-600"
-                        required>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">آدرس (Address)</label>
-                    <input type="text" name="address" placeholder="your-app.up.railway.app"
-                        class="w-full p-2 rounded bg-gray-700 border border-gray-600" required>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">پورت (Port)</label>
-                    <input type="text" name="port" value="443"
-                        class="w-full p-2 rounded bg-gray-700 border border-gray-600" required>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">UUID</label>
-                    <div class="flex">
-                        <input type="text" name="uuid" id="uuid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                            class="w-9/12 p-2 rounded bg-gray-700 border border-gray-600 ml-2" required>
-                        <button type="button" onclick="generateUUID('uuid')"
-                            class="w-3/12 bg-green-600 hover:bg-green-700 p-2 rounded font-bold">ساخت uuid</button>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">پروتکل انتقال</label>
-                    <select name="protocol" class="w-full p-2 rounded bg-gray-700 border border-gray-600">
-                        <option value="ws">WebSocket (ws)</option>
-                        <option value="xhttp">XHTTP</option>
-                        <option value="grpc">gRPC</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">Host (SNI)</label>
-                    <input type="text" name="host" class="w-full p-2 rounded bg-gray-700 border border-gray-600"
-                        required>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">Path</label>
-                    <input type="text" name="path" id="path"
-                        class="w-full p-2 rounded bg-gray-700 border border-gray-600" required>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">TLS</label>
-                    <select name="tls" class="w-full p-2 rounded bg-gray-700 border border-gray-600">
-                        <option value="tls">TLS</option>
-                        <option value="reality">Reality</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">Fingerprint</label>
-                    <select name="fp" class="w-full p-2 rounded bg-gray-700 border border-gray-600">
-                        <option value="chrome">Chrome</option>
-                        <option value="firefox">Firefox</option>
-                        <option value="ios">iOS</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm mb-1">ALPN</label>
-                    <select name="alpn" class="w-full p-2 rounded bg-gray-700 border border-gray-600">
-                        <option value="h3">h3</option>
-                        <option value="h2">h2</option>
-                        <option value="http/1.1" selected>http/1.1</option>
-                    </select>
+        <div class="my-8 bg-red-400 rounded-lg p-2 shadow text-white">
+            توجه!!<br>
+            این پنل صرفا برای استفاده شخصی طراحی شده ، پس برای فروش از آن استفاده نکنید.<br>
+            در Railway از بخش تنظیمات قسمت Scale لوکیشن سرور را هر منطقه ای که بگذارید آی پی ثابت همان منطقه را دریافت
+            خواهید کرد و به هیچ عنوان نشر آی پی نخواهید داشت
+        </div>
+
+        <!-- Open the modal using ID.showModal() method -->
+        <button class="btn" onclick="my_modal_1.showModal()">+ افزودن کاربر جدید</button>
+        <dialog id="my_modal_1" class="modal">
+            <div class="modal-box w-11/12 max-w-5xl">
+                <h3 class="text-lg font-bold">افزودن کاربر جدید</h3>
+                <p class="py-4">پورت را میتوانید تغییر ندهید، متناسب با اپراتور و موقعیت مکانی خودتون و لوکیشن سرور
+                    انتخابی باید کانفیگ های متعددی با پروتکل های مختلف درست کنید تا نتیجه مطلوب را دریافت کنید</p>
+                <div class="modal-action flex flex-col">
+                    <form id="configForm" class="p-6 rounded-lg shadow-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm mb-1">نام کاربری (Remark)</label>
+                                <input type="text" name="username" class="input w-full" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">آدرس (Address)</label>
+                                <input type="text" name="address" onclick="this.value = get_host()"
+                                    placeholder="your-app.up.railway.app" class="input w-full" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">پورت (Port)</label>
+                                <input type="text" name="port" value="443" class="input w-full" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">UUID</label>
+                                <div class="flex gap-2">
+                                    <input type="text" name="uuid" id="uuid"
+                                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" class="w-9/12 input"
+                                        required>
+                                    <button type="button" onclick="generateUUID('uuid')"
+                                        class="w-3/12 btn btn-warning">ساخت
+                                        uuid</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">پروتکل انتقال</label>
+                                <select name="protocol" class="select w-full">
+                                    <option value="ws">WebSocket (ws)</option>
+                                    <option value="xhttp">XHTTP</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">Host (SNI)</label>
+                                <input type="text" name="host" onclick="this.value = get_host()" class="input w-full"
+                                    required>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">Path</label>
+                                <input type="text" name="path" id="path" class="input w-full" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">TLS</label>
+                                <select name="tls" class="select w-full">
+                                    <option value="tls" selected>TLS</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">Fingerprint</label>
+                                <select name="fp" class="select w-full">
+                                    <option value="chrome">Chrome</option>
+                                    <option value="firefox">Firefox</option>
+                                    <option value="ios">iOS</option>
+                                    <option value="random">RANDOM</option>
+                                    <option value="randomized">RANDOMIZED</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm mb-1">ALPN</label>
+                                <select name="alpn" class="select w-full">
+                                    <option value="h3">h3</option>
+                                    <option value="h2">h2</option>
+                                    <option value="http/1.1" selected>http/1.1</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full btn btn-success mt-4">ساخت
+                            کانفیگ</button>
+                    </form>
+                    <form method="dialog">
+                        <!-- if there is a button in form, it will close the modal -->
+
+                        <button class="btn">بستن پنجره</button>
+                    </form>
                 </div>
             </div>
-            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 p-2 rounded font-bold">ساخت
-                کانفیگ</button>
-        </form>
+        </dialog>
+
+
 
         <div id="result" class="mt-6 hidden bg-gray-800 p-6 rounded-lg shadow-lg">
             <h3 class="text-lg font-bold mb-2">لینک کانفیگ:</h3>
             <div class="flex gap-2">
-                <input id="configLink" type="text"
-                    class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-left" readonly>
+                <input id="configLink" type="text" class="input w-full text-left" readonly>
                 <button onclick="copyLink()" class="bg-blue-600 hover:bg-blue-700 px-4 rounded">کپی</button>
             </div>
             <p id="message" class="mt-2 text-green-400"></p>
         </div>
 
-        <h2 class="text-xl font-bold mt-8 mb-4">کانفیگ‌های ذخیره شده</h2>
-        <div id="configsList" class="space-y-2"></div>
+        <h2 class="text-xl font-bold mt-8 mb-4">کاربران ساخته شده</h2>
+        <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100">
+
+            <table class="table space-y-2">
+                <tr>
+                    <th></th>
+                    <th>نام کاربری</th>
+                    <th>پورت</th>
+                    <th>پروتکل</th>
+                    <th>TLS</th>
+                    <th>ALP</th>
+                    <th>FP</th>
+                    <th></th>
+                </tr>
+                <tbody id="configsList">
+
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -151,19 +198,50 @@
             const container = document.getElementById('configsList');
             container.innerHTML = '';
             configs.forEach(c => {
+                const params = new URLSearchParams();
+                params.set('encryption', 'none');
+                params.set('security', c.tls);
+                params.set('sni', c.host);
+                params.set('fp', c.fp);
+                params.set('alpn', c.alpn);
+                params.set('insecure', '0');
+                params.set('allowInsecure', '0');
+                params.set('type', c.protocol);
+                params.set('host', c.host);
+                params.set('path', c.path);
+                if (c.protocol === 'xhttp') params.set('mode', 'auto');
+
+                const link = `vless://${c.uuid}@${c.address}:${c.port}?${params.toString()}#${encodeURIComponent(c.username)}`;
+
                 container.innerHTML += `
-                    <div class="bg-gray-800 p-4 rounded border border-gray-700">
-                        <div class="flex justify-between">
-                            <span class="font-bold">${c.username}</span>
-                            <span class="text-gray-400 text-sm">${c.created_at}</span>
-                        </div>
-                        <div class="text-sm text-gray-300 mt-1">${c.address}:${c.port} | ${c.protocol} | ${c.path}</div>
-                    </div>
-                `;
+                    <tr>
+                        <td></td>
+                        <td>${c.username}</td>
+                        <td>${c.port}</td>
+                        <td>${c.protocol}</td>
+                        <td>${c.tls}</td>
+                        <td>${c.alpn}</td>
+                        <td>${c.fp}</td>
+                        <td>
+                            <button class="btn btn-info" onclick="copy_config('${link}')">کپی</button>
+                        </td>
+                    </tr>
+                `
             });
         }
 
         loadConfigs();
+
+        function copy_config(link) {
+            navigator.clipboard.writeText(link)
+                .then(() => {
+                    alert("Copied the vless config: " + link);
+                })
+                .catch(err => {
+                    console.error("Copy failed:", err);
+                    alert("Failed to copy the vless config.");
+                });
+        }
 
         function generateUUID(inputId) {
             const input = document.getElementById(inputId);
@@ -178,6 +256,11 @@
             input.value = uuid;
 
             document.getElementById('path').value = '/user/' + uuid;
+        }
+
+        function get_host() {
+            const domain = window.location.host
+            return domain
         }
     </script>
 </body>
