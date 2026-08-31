@@ -104,7 +104,7 @@
               <th>کاربر</th>
               <th>UUID</th>
               <th>اینباندهای مجاز</th>
-              <th>لینک‌ها</th>
+              <th>کپی کانفیگ‌ها</th>
             </tr>
           </thead>
           <tbody id="usersTableBody"></tbody>
@@ -301,13 +301,11 @@
   </dialog>
 
   <script>
-    // ===== State =====
     let panels = [];
     let inbounds = [];
     let users = [];
     let usersWithAccess = [];
 
-    // ===== Utils =====
     async function api(url, options = {}) {
       const res = await fetch(url, options);
       const txt = await res.text();
@@ -335,8 +333,20 @@
 
     async function copyText(text) {
       try {
-        await navigator.clipboard.writeText(text);
-        alert('کپی شد ✅');
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          ta.remove();
+        }
+        alert('همه لینک‌ها کپی شد ✅\nحالا داخل v2ray paste کنید.');
       } catch (e) {
         alert('کپی نشد ❌');
       }
@@ -365,11 +375,9 @@
       }
     }
 
-    // ===== Loaders =====
     async function loadPanels() {
       panels = await api('/api/panels');
 
-      // inbound panel select
       const sel = document.getElementById('inbound_panel_id');
       sel.innerHTML = '';
       panels.forEach(p => {
@@ -379,7 +387,6 @@
         sel.appendChild(o);
       });
 
-      // filter panel select
       const f = document.getElementById('filterPanel');
       f.innerHTML = '<option value="">همه پنل‌ها</option>';
       panels.forEach(p => {
@@ -432,7 +439,9 @@
 
       inbounds.forEach(i => {
         const checked = selectedInboundIds.includes(i.id) ? 'checked' : '';
-        const isRemoteBadge = Number(i.is_remote) === 1 ? `<span class="badge badge-warning badge-xs">Remote</span>` : `<span class="badge badge-success badge-xs">Local</span>`;
+        const isRemoteBadge = Number(i.is_remote) === 1
+          ? `<span class="badge badge-warning badge-xs">Remote</span>`
+          : `<span class="badge badge-success badge-xs">Local</span>`;
 
         box.innerHTML += `
           <label class="label cursor-pointer justify-start gap-2 bg-base-100 border rounded-lg px-2 py-2">
@@ -478,10 +487,24 @@
           return `<span class="badge badge-outline m-1">${esc(i.panel_name)} ${remote ? '🛰️' : '🏠'} | ${esc(i.protocol)} | ${esc(i.host)}${esc(i.path)}</span>`;
         }).join('') || '-';
 
-        const linksHtml = (u.links || []).map(l => {
-          const safe = JSON.stringify(l.link);
-          return `<button class="btn btn-xs btn-info m-1" onclick='copyText(${safe})'>کپی ${esc(l.protocol)} ${esc(l.host)}${esc(l.path)}</button>`;
-        }).join('') || '-';
+        // ✅ یک دکمه برای کپی همه لینک‌ها
+        const allLinksText = (u.links || []).map(l => l.link).join('\n');
+        const linksHtml = (u.links && u.links.length)
+          ? `
+            <div class="flex flex-col gap-2">
+              <button class="btn btn-sm btn-primary"
+                onclick='copyText(${JSON.stringify(allLinksText)})'>
+                کپی همه لینک‌ها (${u.links.length})
+              </button>
+              <details class="collapse collapse-arrow bg-base-200">
+                <summary class="collapse-title text-xs">نمایش لینک‌ها</summary>
+                <div class="collapse-content">
+                  <pre class="text-[10px] whitespace-pre-wrap break-all">${esc(allLinksText)}</pre>
+                </div>
+              </details>
+            </div>
+          `
+          : '-';
 
         tbody.innerHTML += `
           <tr>
@@ -495,13 +518,11 @@
       });
     }
 
-    // ===== Forms =====
     document.getElementById('panelForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const data = Object.fromEntries(fd);
 
-      // اگر local بود فیلدهای api خالی شود
       if (String(data.is_remote) !== '1') {
         data.api_base = '';
         data.api_key = '';
@@ -584,7 +605,6 @@
       }
     });
 
-    // ===== Refresh =====
     async function refreshAll() {
       await loadPanels();
       await loadInbounds();
@@ -594,7 +614,6 @@
       fillAssignUsers();
     }
 
-    // init
     toggleRemoteFields();
     refreshAll().catch(err => {
       console.error(err);
