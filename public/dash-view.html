@@ -10,6 +10,9 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 
+  <!-- QR Library -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+
   <style>
     body { font-family: 'Vazirmatn', sans-serif; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -19,7 +22,6 @@
 <body class="bg-base-200">
   <div class="max-w-7xl mx-auto p-3 md:p-5">
 
-    <!-- Header -->
     <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 bg-base-100 rounded-xl shadow p-4">
       <div class="flex items-center gap-3">
         <img src="https://avatars.githubusercontent.com/u/49550675?v=4" class="w-14 h-14 rounded-full" alt="logo" />
@@ -36,14 +38,12 @@
       </div>
     </div>
 
-    <!-- Notice -->
     <div class="alert alert-warning mt-4 shadow">
       <span class="text-sm">
         ترتیب درست: <b>1) ساخت پنل</b> ← <b>2) ساخت اینباند داخل پنل</b> ← <b>3) ساخت کاربر</b> ← <b>4) تخصیص دسترسی کاربر به اینباندها</b>.
       </span>
     </div>
 
-    <!-- Actions -->
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
       <button class="btn btn-primary" onclick="panel_modal.showModal()">+ افزودن پنل</button>
       <button class="btn btn-secondary" onclick="inbound_modal.showModal()">+ افزودن اینباند</button>
@@ -51,7 +51,6 @@
       <button class="btn btn-accent" onclick="assign_modal.showModal(); fillAssignUsers();">+ تخصیص دسترسی</button>
     </div>
 
-    <!-- Stats -->
     <div class="grid md:grid-cols-3 gap-3 mt-4">
       <div class="stat bg-base-100 rounded-xl shadow">
         <div class="stat-title">تعداد پنل‌ها</div>
@@ -67,7 +66,6 @@
       </div>
     </div>
 
-    <!-- Filters -->
     <div class="bg-base-100 rounded-xl shadow p-3 mt-4">
       <div class="grid md:grid-cols-4 gap-3">
         <div>
@@ -80,16 +78,9 @@
           <label class="label">جستجوی کاربر</label>
           <input id="filterUser" type="text" class="input input-bordered w-full" placeholder="username..." oninput="renderUsersTable()">
         </div>
-        <div class="md:col-span-2">
-          <label class="label">راهنما</label>
-          <div class="text-xs opacity-70 mt-1">
-            پنل Remote یعنی عملیات ساخت روی Agent مقصد انجام می‌شود؛ شما از همین داشبورد مرکزی مدیریت می‌کنید.
-          </div>
-        </div>
       </div>
     </div>
 
-    <!-- Users Table -->
     <div class="mt-4 bg-base-100 rounded-xl shadow p-3">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-bold">لیست کاربران و دسترسی‌ها</h2>
@@ -104,7 +95,7 @@
               <th>کاربر</th>
               <th>UUID</th>
               <th>اینباندهای مجاز</th>
-              <th>کپی کانفیگ‌ها</th>
+              <th>کپی / QR</th>
             </tr>
           </thead>
           <tbody id="usersTableBody"></tbody>
@@ -112,55 +103,25 @@
       </div>
     </div>
 
-    <!-- Raw Result -->
     <div id="resultBox" class="mt-4 bg-neutral text-neutral-content rounded-xl shadow p-3 hidden">
       <h3 class="font-bold mb-2">Result</h3>
       <pre id="resultText" class="text-xs whitespace-pre-wrap"></pre>
     </div>
   </div>
 
-  <!-- Modal: Add Panel -->
-  <dialog id="panel_modal" class="modal">
-    <div class="modal-box max-w-2xl">
-      <h3 class="font-bold text-lg mb-3">افزودن پنل</h3>
+  <!-- QR Modal -->
+  <dialog id="qr_modal" class="modal">
+    <div class="modal-box max-w-md">
+      <h3 class="font-bold text-lg mb-2">QR Code کانفیگ‌ها</h3>
+      <p class="text-xs opacity-70 mb-3">با گوشی اسکن کنید. اگر اپ شما چند لینک را از یک QR پشتیبانی نکند، از دکمه کپی استفاده کنید.</p>
 
-      <form id="panelForm" class="grid md:grid-cols-2 gap-3">
-        <div>
-          <label class="label">نام پنل</label>
-          <input name="name" class="input input-bordered w-full" required />
-        </div>
+      <div class="flex justify-center">
+        <div id="qrcode" class="p-3 bg-white rounded-lg"></div>
+      </div>
 
-        <div>
-          <label class="label">Address (برای لینک کلاینت)</label>
-          <input name="address" class="input input-bordered w-full" placeholder="nl.example.com" required />
-        </div>
-
-        <div class="md:col-span-2">
-          <label class="cursor-pointer label justify-start gap-2">
-            <input id="panel_is_remote" type="checkbox" class="checkbox checkbox-sm" onchange="toggleRemoteFields()" />
-            <span class="label-text">این پنل Remote است (روی Agent مقصد ساخته شود)</span>
-          </label>
-        </div>
-
-        <div id="remote_fields" class="md:col-span-2 hidden">
-          <div class="grid md:grid-cols-2 gap-3">
-            <div>
-              <label class="label">API Base (Agent URL)</label>
-              <input name="api_base" class="input input-bordered w-full" placeholder="https://us.example.com" />
-            </div>
-            <div>
-              <label class="label">API Key</label>
-              <input name="api_key" class="input input-bordered w-full mono" placeholder="VERY_STRONG_KEY" />
-            </div>
-          </div>
-        </div>
-
-        <input type="hidden" name="is_remote" id="panel_is_remote_hidden" value="0" />
-
-        <div class="md:col-span-2">
-          <button class="btn btn-primary w-full" type="submit">ثبت پنل</button>
-        </div>
-      </form>
+      <div class="mt-3">
+        <button class="btn btn-sm w-full" onclick="copyText(currentQrText)">کپی متن QR</button>
+      </div>
 
       <form method="dialog" class="mt-3">
         <button class="btn w-full">بستن</button>
@@ -168,46 +129,66 @@
     </div>
   </dialog>
 
-  <!-- Modal: Add Inbound -->
+  <!-- Modals قبلی -->
+  <dialog id="panel_modal" class="modal">
+    <div class="modal-box max-w-2xl">
+      <h3 class="font-bold text-lg mb-3">افزودن پنل</h3>
+      <form id="panelForm" class="grid md:grid-cols-2 gap-3">
+        <div>
+          <label class="label">نام پنل</label>
+          <input name="name" class="input input-bordered w-full" required />
+        </div>
+        <div>
+          <label class="label">Address (برای لینک کلاینت)</label>
+          <input name="address" class="input input-bordered w-full" placeholder="nl.example.com" required />
+        </div>
+        <div class="md:col-span-2">
+          <label class="cursor-pointer label justify-start gap-2">
+            <input id="panel_is_remote" type="checkbox" class="checkbox checkbox-sm" onchange="toggleRemoteFields()" />
+            <span class="label-text">این پنل Remote است</span>
+          </label>
+        </div>
+        <div id="remote_fields" class="md:col-span-2 hidden">
+          <div class="grid md:grid-cols-2 gap-3">
+            <div>
+              <label class="label">API Base</label>
+              <input name="api_base" class="input input-bordered w-full" placeholder="https://us.example.com" />
+            </div>
+            <div>
+              <label class="label">API Key</label>
+              <input name="api_key" class="input input-bordered w-full mono" />
+            </div>
+          </div>
+        </div>
+        <input type="hidden" name="is_remote" id="panel_is_remote_hidden" value="0" />
+        <div class="md:col-span-2">
+          <button class="btn btn-primary w-full" type="submit">ثبت پنل</button>
+        </div>
+      </form>
+      <form method="dialog" class="mt-3"><button class="btn w-full">بستن</button></form>
+    </div>
+  </dialog>
+
   <dialog id="inbound_modal" class="modal">
     <div class="modal-box max-w-4xl">
       <h3 class="font-bold text-lg mb-3">افزودن اینباند</h3>
-
       <form id="inboundForm" class="grid md:grid-cols-2 gap-3">
         <div class="md:col-span-2">
           <label class="label">انتخاب پنل</label>
           <select name="panel_id" id="inbound_panel_id" class="select select-bordered w-full" required></select>
         </div>
-
-        <div>
-          <label class="label">Tag (اختیاری)</label>
-          <input name="tag" class="input input-bordered w-full" placeholder="us-ws-1" />
-        </div>
-
-        <div>
-          <label class="label">External Port</label>
-          <input name="port" class="input input-bordered w-full" value="443" required />
-        </div>
-
+        <div><label class="label">Tag</label><input name="tag" class="input input-bordered w-full" /></div>
+        <div><label class="label">External Port</label><input name="port" class="input input-bordered w-full" value="443" required /></div>
         <div>
           <label class="label">Protocol</label>
           <select name="protocol" class="select select-bordered w-full">
-            <option value="ws">WebSocket (ws)</option>
+            <option value="ws">ws</option>
             <option value="xhttp">xhttp</option>
             <option value="grpc">grpc</option>
           </select>
         </div>
-
-        <div>
-          <label class="label">Host (SNI)</label>
-          <input name="host" class="input input-bordered w-full" placeholder="us.example.com" required />
-        </div>
-
-        <div>
-          <label class="label">Path</label>
-          <input name="path" class="input input-bordered w-full" placeholder="/user/abc" required />
-        </div>
-
+        <div><label class="label">Host (SNI)</label><input name="host" class="input input-bordered w-full" required /></div>
+        <div><label class="label">Path</label><input name="path" class="input input-bordered w-full" required /></div>
         <div>
           <label class="label">TLS</label>
           <select name="tls" class="select select-bordered w-full">
@@ -215,7 +196,6 @@
             <option value="none">none</option>
           </select>
         </div>
-
         <div>
           <label class="label">Fingerprint</label>
           <select name="fp" class="select select-bordered w-full">
@@ -226,7 +206,6 @@
             <option value="randomized">randomized</option>
           </select>
         </div>
-
         <div>
           <label class="label">ALPN</label>
           <select name="alpn" class="select select-bordered w-full">
@@ -235,29 +214,17 @@
             <option value="h3">h3</option>
           </select>
         </div>
-
-        <div class="md:col-span-2">
-          <button class="btn btn-secondary w-full" type="submit">ثبت اینباند</button>
-        </div>
+        <div class="md:col-span-2"><button class="btn btn-secondary w-full" type="submit">ثبت اینباند</button></div>
       </form>
-
-      <form method="dialog" class="mt-3">
-        <button class="btn w-full">بستن</button>
-      </form>
+      <form method="dialog" class="mt-3"><button class="btn w-full">بستن</button></form>
     </div>
   </dialog>
 
-  <!-- Modal: Add User -->
   <dialog id="user_modal" class="modal">
     <div class="modal-box max-w-2xl">
       <h3 class="font-bold text-lg mb-3">افزودن کاربر</h3>
-
       <form id="userForm" class="space-y-3">
-        <div>
-          <label class="label">Username</label>
-          <input name="username" class="input input-bordered w-full" required />
-        </div>
-
+        <div><label class="label">Username</label><input name="username" class="input input-bordered w-full" required /></div>
         <div>
           <label class="label">UUID</label>
           <div class="flex gap-2">
@@ -265,56 +232,40 @@
             <button type="button" class="btn btn-warning" onclick="generateUUID('new_user_uuid')">ساخت UUID</button>
           </div>
         </div>
-
         <button class="btn btn-success w-full" type="submit">ثبت کاربر</button>
       </form>
-
-      <form method="dialog" class="mt-3">
-        <button class="btn w-full">بستن</button>
-      </form>
+      <form method="dialog" class="mt-3"><button class="btn w-full">بستن</button></form>
     </div>
   </dialog>
 
-  <!-- Modal: Assign Access -->
   <dialog id="assign_modal" class="modal">
     <div class="modal-box max-w-5xl">
       <h3 class="font-bold text-lg mb-3">تخصیص دسترسی کاربر به اینباندها</h3>
-
       <form id="assignForm" class="space-y-3">
         <div>
           <label class="label">انتخاب کاربر</label>
           <select id="assign_user_id" class="select select-bordered w-full" required onchange="prefillUserAccess()"></select>
         </div>
-
         <div>
           <label class="label">اینباندهای مجاز</label>
           <div id="assign_inbounds_box" class="grid md:grid-cols-2 gap-2 border rounded-xl p-3 max-h-80 overflow-auto bg-base-200"></div>
         </div>
-
         <button class="btn btn-accent w-full" type="submit">ذخیره دسترسی</button>
       </form>
-
-      <form method="dialog" class="mt-3">
-        <button class="btn w-full">بستن</button>
-      </form>
+      <form method="dialog" class="mt-3"><button class="btn w-full">بستن</button></form>
     </div>
   </dialog>
 
   <script>
-    let panels = [];
-    let inbounds = [];
-    let users = [];
-    let usersWithAccess = [];
+    let panels = [], inbounds = [], users = [], usersWithAccess = [];
+    let currentQrText = '';
 
     async function api(url, options = {}) {
       const res = await fetch(url, options);
       const txt = await res.text();
       let data;
       try { data = JSON.parse(txt); } catch { data = txt; }
-
-      if (!res.ok) {
-        throw new Error((data && data.error) ? data.error : txt || `HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error((data && data.error) ? data.error : txt || `HTTP ${res.status}`);
       return data;
     }
 
@@ -346,38 +297,41 @@
           document.execCommand('copy');
           ta.remove();
         }
-        alert('همه لینک‌ها کپی شد ✅\nحالا داخل v2ray paste کنید.');
-      } catch (e) {
+        alert('کپی شد ✅');
+      } catch {
         alert('کپی نشد ❌');
       }
     }
 
+    function showQr(text) {
+      currentQrText = text || '';
+      const qrEl = document.getElementById('qrcode');
+      qrEl.innerHTML = '';
+      qr_modal.showModal();
+
+      new QRCode(qrEl, {
+        text: currentQrText,
+        width: 260,
+        height: 260,
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+
     function esc(str = '') {
-      return String(str)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+      return String(str).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
     }
 
     function toggleRemoteFields() {
       const chk = document.getElementById('panel_is_remote');
       const wrap = document.getElementById('remote_fields');
       const hidden = document.getElementById('panel_is_remote_hidden');
-
-      if (chk.checked) {
-        wrap.classList.remove('hidden');
-        hidden.value = '1';
-      } else {
-        wrap.classList.add('hidden');
-        hidden.value = '0';
-      }
+      if (chk.checked) { wrap.classList.remove('hidden'); hidden.value = '1'; }
+      else { wrap.classList.add('hidden'); hidden.value = '0'; }
     }
 
     async function loadPanels() {
       panels = await api('/api/panels');
-
       const sel = document.getElementById('inbound_panel_id');
       sel.innerHTML = '';
       panels.forEach(p => {
@@ -386,7 +340,6 @@
         o.textContent = `${p.name} | ${p.address} ${Number(p.is_remote) === 1 ? '(Remote)' : '(Local)'}`;
         sel.appendChild(o);
       });
-
       const f = document.getElementById('filterPanel');
       f.innerHTML = '<option value="">همه پنل‌ها</option>';
       panels.forEach(p => {
@@ -395,7 +348,6 @@
         o.textContent = `${p.name} ${Number(p.is_remote) === 1 ? '(Remote)' : '(Local)'}`;
         f.appendChild(o);
       });
-
       document.getElementById('statPanels').textContent = panels.length;
     }
 
@@ -416,14 +368,12 @@
     function fillAssignUsers() {
       const sel = document.getElementById('assign_user_id');
       sel.innerHTML = '';
-
       users.forEach(u => {
         const o = document.createElement('option');
         o.value = u.id;
         o.textContent = `${u.username} | ${u.uuid}`;
         sel.appendChild(o);
       });
-
       renderAssignInboundCheckboxes();
       prefillUserAccess();
     }
@@ -431,25 +381,19 @@
     function renderAssignInboundCheckboxes(selectedInboundIds = []) {
       const box = document.getElementById('assign_inbounds_box');
       box.innerHTML = '';
-
       if (!inbounds.length) {
         box.innerHTML = `<div class="text-error text-sm">اینباندی ثبت نشده است.</div>`;
         return;
       }
-
       inbounds.forEach(i => {
         const checked = selectedInboundIds.includes(i.id) ? 'checked' : '';
-        const isRemoteBadge = Number(i.is_remote) === 1
+        const badge = Number(i.is_remote) === 1
           ? `<span class="badge badge-warning badge-xs">Remote</span>`
           : `<span class="badge badge-success badge-xs">Local</span>`;
-
         box.innerHTML += `
           <label class="label cursor-pointer justify-start gap-2 bg-base-100 border rounded-lg px-2 py-2">
             <input type="checkbox" class="checkbox checkbox-sm assign-inbound" value="${i.id}" ${checked} />
-            <span class="text-sm">
-              ${isRemoteBadge}
-              <b>${esc(i.panel_name)}</b> | ${esc(i.tag || '-')} | ${esc(i.protocol)} | ${esc(i.host)}${esc(i.path)} | port:${esc(i.port)}
-            </span>
+            <span class="text-sm">${badge} <b>${esc(i.panel_name)}</b> | ${esc(i.tag || '-')} | ${esc(i.protocol)} | ${esc(i.host)}${esc(i.path)} | port:${esc(i.port)}</span>
           </label>
         `;
       });
@@ -458,7 +402,6 @@
     function prefillUserAccess() {
       const userId = Number(document.getElementById('assign_user_id').value || 0);
       if (!userId) return renderAssignInboundCheckboxes([]);
-
       const row = usersWithAccess.find(x => Number(x.user_id) === userId);
       const selected = row?.inbounds?.map(i => Number(i.inbound_id)) || [];
       renderAssignInboundCheckboxes(selected);
@@ -472,14 +415,8 @@
       const filterUser = document.getElementById('filterUser').value.trim().toLowerCase();
 
       let data = [...usersWithAccess];
-
-      if (filterUser) {
-        data = data.filter(u => String(u.username || '').toLowerCase().includes(filterUser));
-      }
-
-      if (filterPanel) {
-        data = data.filter(u => (u.inbounds || []).some(i => i.panel_name === filterPanel));
-      }
+      if (filterUser) data = data.filter(u => String(u.username || '').toLowerCase().includes(filterUser));
+      if (filterPanel) data = data.filter(u => (u.inbounds || []).some(i => i.panel_name === filterPanel));
 
       data.forEach((u, idx) => {
         const inbHtml = (u.inbounds || []).map(i => {
@@ -487,15 +424,21 @@
           return `<span class="badge badge-outline m-1">${esc(i.panel_name)} ${remote ? '🛰️' : '🏠'} | ${esc(i.protocol)} | ${esc(i.host)}${esc(i.path)}</span>`;
         }).join('') || '-';
 
-        // ✅ یک دکمه برای کپی همه لینک‌ها
         const allLinksText = (u.links || []).map(l => l.link).join('\n');
-        const linksHtml = (u.links && u.links.length)
+
+        const actionsHtml = (u.links && u.links.length)
           ? `
             <div class="flex flex-col gap-2">
-              <button class="btn btn-sm btn-primary"
-                onclick='copyText(${JSON.stringify(allLinksText)})'>
-                کپی همه لینک‌ها (${u.links.length})
-              </button>
+              <div class="flex gap-2">
+                <button class="btn btn-sm btn-primary"
+                  onclick='copyText(${JSON.stringify(allLinksText)})'>
+                  کپی همه (${u.links.length})
+                </button>
+                <button class="btn btn-sm btn-outline"
+                  onclick='showQr(${JSON.stringify(allLinksText)})'>
+                  QR
+                </button>
+              </div>
               <details class="collapse collapse-arrow bg-base-200">
                 <summary class="collapse-title text-xs">نمایش لینک‌ها</summary>
                 <div class="collapse-content">
@@ -512,7 +455,7 @@
             <td>${esc(u.username)}</td>
             <td class="text-xs mono">${esc(u.uuid)}</td>
             <td>${inbHtml}</td>
-            <td>${linksHtml}</td>
+            <td>${actionsHtml}</td>
           </tr>
         `;
       });
@@ -520,89 +463,58 @@
 
     document.getElementById('panelForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const fd = new FormData(e.target);
-      const data = Object.fromEntries(fd);
-
-      if (String(data.is_remote) !== '1') {
-        data.api_base = '';
-        data.api_key = '';
-      }
-
+      const data = Object.fromEntries(new FormData(e.target));
+      if (String(data.is_remote) !== '1') { data.api_base = ''; data.api_key = ''; }
       try {
         const r = await api('/api/panels', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
         });
         showResult(r);
         e.target.reset();
         toggleRemoteFields();
         await refreshAll();
-      } catch (err) {
-        alert('خطا در ساخت پنل: ' + err.message);
-      }
+      } catch (err) { alert('خطا در ساخت پنل: ' + err.message); }
     });
 
     document.getElementById('inboundForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const fd = new FormData(e.target);
-      const data = Object.fromEntries(fd);
-
-      const panelId = data.panel_id;
-      delete data.panel_id;
-
+      const data = Object.fromEntries(new FormData(e.target));
+      const panelId = data.panel_id; delete data.panel_id;
       try {
         const r = await api(`/api/panels/${panelId}/inbounds`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
         });
         showResult(r);
         e.target.reset();
         await refreshAll();
-      } catch (err) {
-        alert('خطا در ساخت اینباند: ' + err.message);
-      }
+      } catch (err) { alert('خطا در ساخت اینباند: ' + err.message); }
     });
 
     document.getElementById('userForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const fd = new FormData(e.target);
-      const data = Object.fromEntries(fd);
-
+      const data = Object.fromEntries(new FormData(e.target));
       try {
         const r = await api('/api/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
         });
         showResult(r);
         e.target.reset();
         await refreshAll();
-      } catch (err) {
-        alert('خطا در ساخت کاربر: ' + err.message);
-      }
+      } catch (err) { alert('خطا در ساخت کاربر: ' + err.message); }
     });
 
     document.getElementById('assignForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-
       const userId = Number(document.getElementById('assign_user_id').value || 0);
       if (!userId) return alert('کاربر انتخاب نشده');
-
       const inboundIds = [...document.querySelectorAll('.assign-inbound:checked')].map(x => Number(x.value));
-
       try {
         const r = await api(`/api/users/${userId}/inbounds`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inboundIds })
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inboundIds })
         });
         showResult(r);
         await refreshAll();
-      } catch (err) {
-        alert('خطا در تخصیص دسترسی: ' + err.message);
-      }
+      } catch (err) { alert('خطا در تخصیص دسترسی: ' + err.message); }
     });
 
     async function refreshAll() {
