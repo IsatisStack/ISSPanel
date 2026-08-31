@@ -2,9 +2,9 @@
 <html lang="fa" dir="rtl" data-theme="light">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>داشبورد</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>داشبورد ISSPanel</title>
     <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet"
         type="text/css" />
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
@@ -16,252 +16,354 @@
     </style>
 </head>
 
-<body class="">
-    <div class="max-w-4xl mx-auto">
-        <div class="flex items-center justify-between gap-4 bg-base-300 rounded my-4 shadow p-2">
+<body>
+    <div class="max-w-6xl mx-auto p-3">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-base-300 rounded my-4 shadow p-3">
             <div class="flex items-center gap-2">
-                <img src="https://avatars.githubusercontent.com/u/49550675?v=4" alt="" class="w-24 rounded-full">
-                <h1 class="text-2xl font-bold">پنل ساخت کانفیگ ایساتیس استک (v2.0)</h1>
+                <img src="https://avatars.githubusercontent.com/u/49550675?v=4" alt="" class="w-16 h-16 rounded-full">
+                <h1 class="text-xl md:text-2xl font-bold">پنل مدیریت ISSPanel (Panel / Inbound / User)</h1>
             </div>
-            <div class="flex justify-between items-center gap-4">
-
-                <div class="flex justify-center gap-2">
-                    <a href="https://www.youtube.com/@isatisstack" target="_blank"
-                        class="btn btn-error rounded-full">کانال
-                        یوتیوب</a>
-                    <a href="https://t.me/isatisstackteam" target="_blank" class="btn btn-info rounded-full">کانال
-                        تلگرام</a>
-                </div>
+            <div class="flex gap-2">
+                <a href="https://www.youtube.com/@isatisstack" target="_blank" class="btn btn-error rounded-full">یوتیوب</a>
+                <a href="https://t.me/isatisstackteam" target="_blank" class="btn btn-info rounded-full">تلگرام</a>
                 <a href="/logout" class="btn">خروج</a>
             </div>
         </div>
 
-        <div class="my-8 bg-red-400 rounded-lg p-2 shadow text-white">
-            توجه!!<br>
-            این پنل صرفا برای استفاده شخصی طراحی شده ، پس برای فروش از آن استفاده نکنید.<br>
-            در Railway از بخش تنظیمات قسمت Scale لوکیشن سرور را هر منطقه ای که بگذارید آی پی ثابت همان منطقه را دریافت
-            خواهید کرد و به هیچ عنوان نشر آی پی نخواهید داشت
+        <div class="my-4 bg-red-500 rounded-lg p-3 shadow text-white text-sm">
+            توجه: ابتدا پنل بساز → بعد اینباند بساز → بعد کاربر بساز → در نهایت دسترسی کاربر به اینباندها را مشخص کن.
         </div>
 
-        <!-- Open the modal using ID.showModal() method -->
-        <button class="btn" onclick="my_modal_1.showModal()">+ افزودن کاربر جدید</button>
-        <dialog id="my_modal_1" class="modal">
-            <div class="modal-box w-11/12 max-w-5xl">
-                <h3 class="text-lg font-bold">افزودن کاربر جدید</h3>
-                <p class="py-4">پورت را میتوانید تغییر ندهید، متناسب با اپراتور و موقعیت مکانی خودتون و لوکیشن سرور
-                    انتخابی باید کانفیگ های متعددی با پروتکل های مختلف درست کنید تا نتیجه مطلوب را دریافت کنید</p>
-                <div class="modal-action flex flex-col">
-                    <form id="configForm" class="p-6 rounded-lg shadow-lg">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm mb-1">نام کاربری (Remark)</label>
-                                <input type="text" name="username" class="input w-full" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">آدرس (Address)</label>
-                                <input type="text" name="address" onclick="this.value = get_host()"
-                                    placeholder="your-app.up.railway.app" class="input w-full" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">پورت (Port)</label>
-                                <input type="text" name="port" value="443" class="input w-full" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">UUID</label>
-                                <div class="flex gap-2">
-                                    <input type="text" name="uuid" id="uuid"
-                                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" class="w-9/12 input"
-                                        required>
-                                    <button type="button" onclick="generateUUID('uuid')"
-                                        class="w-3/12 btn btn-warning">ساخت
-                                        uuid</button>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">پروتکل انتقال</label>
-                                <select name="protocol" class="select w-full">
-                                    <option value="ws">WebSocket (ws)</option>
-                                    <option value="xhttp">XHTTP</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">Host (SNI)</label>
-                                <input type="text" name="host" onclick="this.value = get_host()" class="input w-full"
-                                    required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">Path</label>
-                                <input type="text" name="path" id="path" class="input w-full" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">TLS</label>
-                                <select name="tls" class="select w-full">
-                                    <option value="tls" selected>TLS</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">Fingerprint</label>
-                                <select name="fp" class="select w-full">
-                                    <option value="chrome">Chrome</option>
-                                    <option value="firefox">Firefox</option>
-                                    <option value="ios">iOS</option>
-                                    <option value="random">RANDOM</option>
-                                    <option value="randomized">RANDOMIZED</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm mb-1">ALPN</label>
-                                <select name="alpn" class="select w-full">
-                                    <option value="h3">h3</option>
-                                    <option value="h2">h2</option>
-                                    <option value="http/1.1" selected>http/1.1</option>
-                                </select>
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full btn btn-success mt-4">ساخت
-                            کانفیگ</button>
-                    </form>
-                    <form method="dialog">
-                        <!-- if there is a button in form, it will close the modal -->
+        <!-- Actions -->
+        <div class="grid md:grid-cols-3 gap-3 my-4">
+            <button class="btn btn-primary" onclick="panel_modal.showModal()">+ افزودن پنل</button>
+            <button class="btn btn-secondary" onclick="inbound_modal.showModal()">+ افزودن اینباند</button>
+            <button class="btn btn-success" onclick="user_modal.showModal()">+ افزودن کاربر و دسترسی</button>
+        </div>
 
-                        <button class="btn">بستن پنجره</button>
-                    </form>
-                </div>
+        <!-- Add Panel Modal -->
+        <dialog id="panel_modal" class="modal">
+            <div class="modal-box">
+                <h3 class="font-bold text-lg mb-3">افزودن پنل</h3>
+                <form id="panelForm" class="space-y-3">
+                    <div>
+                        <label class="label">نام پنل</label>
+                        <input name="name" class="input input-bordered w-full" required />
+                    </div>
+                    <div>
+                        <label class="label">آدرس پنل (domain)</label>
+                        <input name="address" class="input input-bordered w-full" onclick="this.value = get_host()" required />
+                    </div>
+                    <button class="btn btn-primary w-full" type="submit">ثبت پنل</button>
+                </form>
+                <form method="dialog" class="mt-3"><button class="btn w-full">بستن</button></form>
             </div>
         </dialog>
 
-
-
-        <div id="result" class="mt-6 hidden bg-gray-800 p-6 rounded-lg shadow-lg">
-            <h3 class="text-lg font-bold mb-2">لینک کانفیگ:</h3>
-            <div class="flex gap-2">
-                <input id="configLink" type="text" class="input w-full text-left" readonly>
-                <button onclick="copyLink()" class="bg-blue-600 hover:bg-blue-700 px-4 rounded">کپی</button>
+        <!-- Add Inbound Modal -->
+        <dialog id="inbound_modal" class="modal">
+            <div class="modal-box max-w-3xl">
+                <h3 class="font-bold text-lg mb-3">افزودن اینباند</h3>
+                <form id="inboundForm" class="grid md:grid-cols-2 gap-3">
+                    <div class="md:col-span-2">
+                        <label class="label">انتخاب پنل</label>
+                        <select name="panel_id" id="inbound_panel_id" class="select select-bordered w-full" required></select>
+                    </div>
+                    <div>
+                        <label class="label">Tag (اختیاری)</label>
+                        <input name="tag" class="input input-bordered w-full" placeholder="inb-tehran-1" />
+                    </div>
+                    <div>
+                        <label class="label">Port (External)</label>
+                        <input name="port" class="input input-bordered w-full" value="443" required />
+                    </div>
+                    <div>
+                        <label class="label">Protocol</label>
+                        <select name="protocol" class="select select-bordered w-full">
+                            <option value="ws">ws</option>
+                            <option value="xhttp">xhttp</option>
+                            <option value="grpc">grpc</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Host (SNI)</label>
+                        <input name="host" class="input input-bordered w-full" onclick="this.value = get_host()" required />
+                    </div>
+                    <div>
+                        <label class="label">Path</label>
+                        <input name="path" class="input input-bordered w-full" placeholder="/edge-1" required />
+                    </div>
+                    <div>
+                        <label class="label">TLS</label>
+                        <select name="tls" class="select select-bordered w-full">
+                            <option value="tls" selected>tls</option>
+                            <option value="none">none</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">Fingerprint</label>
+                        <select name="fp" class="select select-bordered w-full">
+                            <option value="chrome">chrome</option>
+                            <option value="firefox">firefox</option>
+                            <option value="ios">ios</option>
+                            <option value="random">random</option>
+                            <option value="randomized">randomized</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="label">ALPN</label>
+                        <select name="alpn" class="select select-bordered w-full">
+                            <option value="http/1.1" selected>http/1.1</option>
+                            <option value="h2">h2</option>
+                            <option value="h3">h3</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <button class="btn btn-secondary w-full" type="submit">ثبت اینباند</button>
+                    </div>
+                </form>
+                <form method="dialog" class="mt-3"><button class="btn w-full">بستن</button></form>
             </div>
-            <p id="message" class="mt-2 text-green-400"></p>
+        </dialog>
+
+        <!-- Add User + Access Modal -->
+        <dialog id="user_modal" class="modal">
+            <div class="modal-box max-w-4xl">
+                <h3 class="font-bold text-lg mb-3">افزودن کاربر و تعیین دسترسی</h3>
+                <form id="userForm" class="space-y-3">
+                    <div class="grid md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="label">نام کاربری</label>
+                            <input name="username" class="input input-bordered w-full" required />
+                        </div>
+                        <div>
+                            <label class="label">UUID</label>
+                            <div class="flex gap-2">
+                                <input name="uuid" id="new_user_uuid" class="input input-bordered w-full" required />
+                                <button type="button" class="btn btn-warning" onclick="generateUUID('new_user_uuid')">ساخت UUID</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="label">دسترسی به اینباندها</label>
+                        <div id="inboundsCheckboxes" class="grid md:grid-cols-2 gap-2 max-h-72 overflow-auto border rounded p-3 bg-base-200"></div>
+                    </div>
+
+                    <button class="btn btn-success w-full" type="submit">ثبت کاربر + ذخیره دسترسی</button>
+                </form>
+                <form method="dialog" class="mt-3"><button class="btn w-full">بستن</button></form>
+            </div>
+        </dialog>
+
+        <!-- Table -->
+        <h2 class="text-xl font-bold mt-8 mb-4">لیست کاربران و دسترسی‌ها</h2>
+        <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>کاربر</th>
+                        <th>UUID</th>
+                        <th>اینباندهای مجاز</th>
+                        <th>لینک‌ها</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody"></tbody>
+            </table>
         </div>
 
-        <h2 class="text-xl font-bold mt-8 mb-4">کاربران ساخته شده</h2>
-        <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100">
-
-            <table class="table space-y-2">
-                <tr>
-                    <th></th>
-                    <th>نام کاربری</th>
-                    <th>پورت</th>
-                    <th>پروتکل</th>
-                    <th>TLS</th>
-                    <th>ALP</th>
-                    <th>FP</th>
-                    <th></th>
-                </tr>
-                <tbody id="configsList">
-
-                </tbody>
-            </table>
+        <div id="result" class="mt-6 hidden bg-gray-800 text-white p-4 rounded-lg shadow-lg">
+            <h3 class="text-lg font-bold mb-2">نتیجه:</h3>
+            <pre id="resultText" class="text-xs whitespace-pre-wrap"></pre>
         </div>
     </div>
 
     <script>
-        document.getElementById('configForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
+        let panels = [];
+        let inbounds = [];
 
-            const res = await fetch('/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-
-            const result = await res.json();
-            if (result.success) {
-                document.getElementById('result').classList.remove('hidden');
-                document.getElementById('configLink').value = result.link;
-                document.getElementById('message').textContent = result.warning || 'کانفیگ با موفقیت ساخته شد.';
-                loadConfigs();
-            } else {
-                alert('خطا در ساخت کانفیگ');
-            }
-        });
-
-        function copyLink() {
-            const input = document.getElementById('configLink');
-            input.select();
-            document.execCommand('copy');
-            alert('کپی شد!');
-        }
-
-        async function loadConfigs() {
-            const res = await fetch('/api/configs');
-            const configs = await res.json();
-            const container = document.getElementById('configsList');
-            container.innerHTML = '';
-            configs.forEach(c => {
-                const params = new URLSearchParams();
-                params.set('encryption', 'none');
-                params.set('security', c.tls);
-                params.set('sni', c.host);
-                params.set('fp', c.fp);
-                params.set('alpn', c.alpn);
-                params.set('insecure', '0');
-                params.set('allowInsecure', '0');
-                params.set('type', c.protocol);
-                params.set('host', c.host);
-                params.set('path', c.path);
-                if (c.protocol === 'xhttp') params.set('mode', 'auto');
-
-                const link = `vless://${c.uuid}@${c.address}:${c.port}?${params.toString()}#${encodeURIComponent(c.username)}`;
-
-                container.innerHTML += `
-                    <tr>
-                        <td></td>
-                        <td>${c.username}</td>
-                        <td>${c.port}</td>
-                        <td>${c.protocol}</td>
-                        <td>${c.tls}</td>
-                        <td>${c.alpn}</td>
-                        <td>${c.fp}</td>
-                        <td>
-                            <button class="btn btn-info" onclick="copy_config('${link}')">کپی</button>
-                        </td>
-                    </tr>
-                `
-            });
-        }
-
-        loadConfigs();
-
-        function copy_config(link) {
-            navigator.clipboard.writeText(link)
-                .then(() => {
-                    alert("Copied the vless config: " + link);
-                })
-                .catch(err => {
-                    console.error("Copy failed:", err);
-                    alert("Failed to copy the vless config.");
-                });
+        function get_host() {
+            return window.location.host;
         }
 
         function generateUUID(inputId) {
             const input = document.getElementById(inputId);
+            if (!input) return;
+            input.value = crypto.randomUUID();
+        }
 
-            if (!input) {
-                console.error(`Input with id "${inputId}" not found.`);
+        function showResult(obj) {
+            document.getElementById('result').classList.remove('hidden');
+            document.getElementById('resultText').textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+        }
+
+        async function api(url, options = {}) {
+            const res = await fetch(url, options);
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || `HTTP ${res.status}`);
+            }
+            const ct = res.headers.get('content-type') || '';
+            if (ct.includes('application/json')) return res.json();
+            return res.text();
+        }
+
+        async function loadPanels() {
+            panels = await api('/api/panels');
+            const sel = document.getElementById('inbound_panel_id');
+            sel.innerHTML = '';
+            panels.forEach(p => {
+                const op = document.createElement('option');
+                op.value = p.id;
+                op.textContent = `${p.name} (${p.address})`;
+                sel.appendChild(op);
+            });
+        }
+
+        async function loadInbounds() {
+            inbounds = await api('/api/inbounds');
+            const box = document.getElementById('inboundsCheckboxes');
+            box.innerHTML = '';
+
+            if (!inbounds.length) {
+                box.innerHTML = '<div class="text-sm text-error">اینباندی ثبت نشده است.</div>';
                 return;
             }
 
-            let uuid = crypto.randomUUID();
-
-            input.value = uuid;
-
-            document.getElementById('path').value = '/user/' + uuid;
+            inbounds.forEach(i => {
+                const label = document.createElement('label');
+                label.className = 'label cursor-pointer justify-start gap-2 border rounded px-2 py-1 bg-base-100';
+                label.innerHTML = `
+          <input type="checkbox" class="checkbox checkbox-sm inbound-checkbox" value="${i.id}">
+          <span class="text-sm">
+            [Panel: ${i.panel_name}] ${i.tag || '-'} | ${i.protocol} | ${i.host}${i.path} | port:${i.port}
+          </span>
+        `;
+                box.appendChild(label);
+            });
         }
 
-        function get_host() {
-            const domain = window.location.host
-            return domain
+        async function loadUsersAccess() {
+            const data = await api('/api/users-with-access');
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+
+            data.forEach((u, idx) => {
+                const linksHtml = (u.links || []).map(l => `
+          <button class="btn btn-xs btn-info m-1" onclick='copyText(${JSON.stringify(l.link)})'>
+            کپی ${l.protocol} ${l.host}${l.path}
+          </button>
+        `).join('');
+
+                const inboundsHtml = (u.inbounds || []).map(i =>
+                    `<span class="badge badge-outline m-1">${i.panel_name} | ${i.protocol} | ${i.host}${i.path}</span>`
+                ).join('');
+
+                tbody.innerHTML += `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${u.username}</td>
+            <td class="text-xs">${u.uuid}</td>
+            <td>${inboundsHtml || '-'}</td>
+            <td>${linksHtml || '-'}</td>
+          </tr>
+        `;
+            });
         }
+
+        async function refreshAll() {
+            await loadPanels();
+            await loadInbounds();
+            await loadUsersAccess();
+        }
+
+        // Panel form
+        document.getElementById('panelForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd);
+            try {
+                const r = await api('/api/panels', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                showResult(r);
+                e.target.reset();
+                await refreshAll();
+            } catch (err) {
+                alert('خطا در ساخت پنل: ' + err.message);
+            }
+        });
+
+        // Inbound form
+        document.getElementById('inboundForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd);
+            const panelId = data.panel_id;
+            delete data.panel_id;
+            try {
+                const r = await api(`/api/panels/${panelId}/inbounds`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                showResult(r);
+                e.target.reset();
+                await refreshAll();
+            } catch (err) {
+                alert('خطا در ساخت اینباند: ' + err.message);
+            }
+        });
+
+        // User + access form
+        document.getElementById('userForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd);
+
+            const selectedInboundIds = [...document.querySelectorAll('.inbound-checkbox:checked')]
+                .map(x => Number(x.value));
+
+            try {
+                // 1) create user
+                const userRes = await api('/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: data.username, uuid: data.uuid })
+                });
+
+                // 2) assign inbounds
+                const accessRes = await api(`/api/users/${userRes.id}/inbounds`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ inboundIds: selectedInboundIds })
+                });
+
+                showResult({ user: userRes, access: accessRes });
+                e.target.reset();
+                document.querySelectorAll('.inbound-checkbox').forEach(ch => ch.checked = false);
+                await refreshAll();
+            } catch (err) {
+                alert('خطا در ساخت کاربر/دسترسی: ' + err.message);
+            }
+        });
+
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('کپی شد ✅');
+            } catch (e) {
+                alert('کپی نشد ❌');
+            }
+        }
+
+        refreshAll().catch(err => {
+            console.error(err);
+            alert('خطا در بارگذاری اولیه: ' + err.message);
+        });
     </script>
 </body>
 
