@@ -11,7 +11,6 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 
-// Node 18+ (native fetch)
 const fetchFn = global.fetch ? global.fetch.bind(global) : null;
 if (!fetchFn) {
   console.error('❌ Node.js 18+ required (fetch).');
@@ -20,10 +19,8 @@ if (!fetchFn) {
 
 const PORT = Number(process.env.PORT || 3000);
 const NODE_ROLE = (process.env.NODE_ROLE || 'hybrid').toLowerCase(); // master | agent | hybrid
-
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin';
-
 const AGENT_KEY = process.env.AGENT_KEY || 'change-me-agent-key';
 
 const XRAY_BASE_PORT = parseInt(process.env.XRAY_BASE_PORT || '10086', 10);
@@ -41,10 +38,9 @@ const db = new sqlite3.Database(DB_PATH);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
+app.use(express.static(__dirname + '/public'));
 
-// =========================
-// DB INIT
-// =========================
+// ========================= DB INIT =========================
 db.serialize(() => {
   db.run('PRAGMA foreign_keys = ON');
 
@@ -67,7 +63,7 @@ db.serialize(() => {
       remote_inbound_id TEXT DEFAULT '',
       tag TEXT DEFAULT '',
       port TEXT NOT NULL,
-      protocol TEXT NOT NULL, -- ws | xhttp | grpc
+      protocol TEXT NOT NULL,
       host TEXT NOT NULL,
       path TEXT NOT NULL,
       tls TEXT DEFAULT 'tls',
@@ -83,6 +79,7 @@ db.serialize(() => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       uuid TEXT NOT NULL UNIQUE,
+      sub_token TEXT UNIQUE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -98,76 +95,85 @@ db.serialize(() => {
       FOREIGN KEY(inbound_id) REFERENCES inbounds(id) ON DELETE CASCADE
     )
   `);
+
+  // migration for old DB
+  db.all(`PRAGMA table_info(users)`, [], (err, cols) => {
+    if (err) return;
+    const hasSubToken = cols.some(c => c.name === 'sub_token');
+    if (!hasSubToken) {
+      db.run(`ALTER TABLE users ADD COLUMN sub_token TEXT UNIQUE`);
+    }
+  });
 });
 
-// =========================
-// AUTH
-// =========================
+// ========================= AUTH =========================
 function requireAuth(req, res, next) {
   if (req.cookies[COOKIE_NAME] === COOKIE_VALUE) return next();
   return res.redirect('/dash');
 }
-
 function requireAgent(req, res, next) {
   const key = req.headers['x-panel-key'];
   if (!key || key !== AGENT_KEY) return res.status(401).json({ error: 'Unauthorized agent' });
   next();
 }
 
-// =========================
-// BASIC HELPERS
-// =========================
+// ========================= HELPERS =========================
 function isMasterEnabled() {
   return NODE_ROLE === 'master' || NODE_ROLE === 'hybrid';
 }
 function isAgentEnabled() {
   return NODE_ROLE === 'agent' || NODE_ROLE === 'hybrid';
 }
-
-function normalizeHost(h) {
-  if (!h) return '';
-  return String(h).split(':')[0].toLowerCase().trim();
-}
-function normalizePath(p) {
-  if (!p) return '/';
-  p = String(p).trim();
-  return p.startsWith('/') ? p : '/' + p;
-}
-function matchPath(reqPath, basePath) {
-  return reqPath === basePath || reqPath.startsWith(basePath + '/');
-}
-function makeHostPathKey(host, path) {
-  return `${normalizeHost(host)}|${normalizePath(path)}`;
-}
-function randomPath(prefix = '/v') {
-  const r = crypto.randomBytes(8).toString('hex');
-  return normalizePath(`${prefix}-${r}`);
-}
-function randomTag(prefix = 'ib') {
-  return `${prefix}-${crypto.randomBytes(3).toString('hex')}`;
-}
+function normalizeHost(h) { return String(h || '').split(':')[0].toLowerCase().trim(); }
+function normalizePath(p) { p = String(p || '/').trim(); return p.startsWith('/') ? p : '/' + p; }
+function matchPath(reqPath, basePath) { return reqPath === basePath || reqPath.startsWith(basePath + '/'); }
+function makeHostPathKey(host, path) { return `${normalizeHost(host)}|${normalizePath(path)}`; }
+function randomPath(prefix = '/v') { return normalizePath(`${prefix}-${crypto.randomBytes(8).toString('hex')}`); }
+function randomTag(prefix = 'ib') { return `${prefix}-${crypto.randomBytes(3).toString('hex')}`; }
+function makeSubToken() { return crypto.randomBytes(18).toString('base64url'); }
 
 function dbGet(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
-  });
+  return new Promise((resolve, reject) => db.get(sql, params, (e, r) => e ? reject(e) : resolve(r)));
 }
 function dbAll(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
-  });
+  return new Promise((resolve, reject) => db.all(sql, params, (e, r) => e ? reject(e) : resolve(r)));
 }
 function dbRun(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) return reject(err);
+    db.run(sql, params, function (e) {
+      if (e) return reject(e);
       resolve({ lastID: this.lastID, changes: this.changes });
     });
   });
 }
-
 async function getPanelById(panelId) {
   return dbGet(`SELECT * FROM panels WHERE id = ?`, [panelId]);
+}
+function getPublicBaseUrl(req) {
+  if (process.env.PUBLIC_BASE_URL) return process.env.PUBLIC_BASE_URL.replace(/\/+$/, '');
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  return `${proto}://${host}`;
+}
+async function ensureUserSubToken(userId) {
+  const u = await dbGet(`SELECT id, sub_token FROM users WHERE id = ?`, [userId]);
+  if (!u) return null;
+  if (u.sub_token) return u.sub_token;
+  let token = makeSubToken();
+  for (let i = 0; i < 5; i++) {
+    try {
+      await dbRun(`UPDATE users SET sub_token = ? WHERE id = ?`, [token, userId]);
+      return token;
+    } catch {
+      token = makeSubToken();
+    }
+  }
+  throw new Error('failed to create unique sub_token');
+}
+async function ensureUserSubTokenByUuid(uuid) {
+  const u = await dbGet(`SELECT id FROM users WHERE uuid = ?`, [uuid]);
+  if (!u) return null;
+  return ensureUserSubToken(u.id);
 }
 
 async function remoteCall(panel, method, path, body) {
@@ -177,17 +183,12 @@ async function remoteCall(panel, method, path, body) {
 
   const res = await fetchFn(url, {
     method,
-    headers: {
-      'content-type': 'application/json',
-      'x-panel-key': panel.api_key || ''
-    },
+    headers: { 'content-type': 'application/json', 'x-panel-key': panel.api_key || '' },
     body: body ? JSON.stringify(body) : undefined
   });
 
   const text = await res.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-
+  let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!res.ok) throw new Error(data.error || data.message || `Remote ${res.status}`);
   return data;
 }
@@ -203,22 +204,35 @@ function buildVlessLink(row) {
   params.set('host', row.host);
   params.set('path', row.path);
   params.set('allowInsecure', '0');
-
   if (row.protocol === 'grpc') {
     params.delete('path');
     params.set('serviceName', row.path.replace(/^\//, ''));
   }
-  if (row.protocol === 'xhttp') {
-    params.set('mode', 'auto');
-  }
+  if (row.protocol === 'xhttp') params.set('mode', 'auto');
 
   const label = `${row.username}-${row.panel_name || 'panel'}-${row.tag || ('inb' + row.inbound_id)}`;
   return `vless://${row.uuid}@${row.address}:${row.external_port}?${params.toString()}#${encodeURIComponent(label)}`;
 }
 
-// =========================
-// WEB
-// =========================
+async function getUserLinksByUserId(userId) {
+  const rows = await dbAll(`
+    SELECT
+      u.username, u.uuid,
+      i.id AS inbound_id, i.tag, i.protocol, i.host, i.path, i.tls, i.fp, i.alpn,
+      i.port AS external_port,
+      p.name AS panel_name, p.address
+    FROM user_inbound_access a
+    JOIN users u ON u.id = a.user_id
+    JOIN inbounds i ON i.id = a.inbound_id
+    JOIN panels p ON p.id = i.panel_id
+    WHERE u.id = ?
+    ORDER BY i.id DESC
+  `, [userId]);
+
+  return rows.map(r => buildVlessLink(r));
+}
+
+// ========================= WEB =========================
 app.get('/', (req, res) => res.sendFile(__dirname + '/public/index.html'));
 app.get('/dash', (req, res) => res.sendFile(__dirname + '/public/dash.html'));
 app.get('/dash/view', requireAuth, (req, res) => res.sendFile(__dirname + '/public/dash-view.html'));
@@ -231,21 +245,55 @@ app.post('/login', (req, res) => {
   }
   return res.status(401).send('نام کاربری یا رمز عبور اشتباه است. <a href="/dash">بازگشت</a>');
 });
-
 app.get('/logout', (req, res) => {
   res.clearCookie(COOKIE_NAME);
   res.redirect('/dash');
 });
 
-// =========================
-// MASTER APIs
-// =========================
+// ========================= SUBSCRIPTION PUBLIC ENDPOINT =========================
+app.get('/sub/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim();
+    if (!token) return res.status(400).send('bad token');
+
+    const user = await dbGet(`SELECT id, username FROM users WHERE sub_token = ?`, [token]);
+    if (!user) return res.status(404).send('not found');
+
+    const links = await getUserLinksByUserId(user.id);
+    const text = links.join('\n');
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(text);
+  } catch (e) {
+    res.status(500).send('server error');
+  }
+});
+
+// optional base64 sub
+app.get('/sub64/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim();
+    const user = await dbGet(`SELECT id FROM users WHERE sub_token = ?`, [token]);
+    if (!user) return res.status(404).send('not found');
+
+    const links = await getUserLinksByUserId(user.id);
+    const text = links.join('\n');
+    const b64 = Buffer.from(text, 'utf8').toString('base64');
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(b64);
+  } catch {
+    res.status(500).send('server error');
+  }
+});
+
+// ========================= MASTER APIs =========================
 if (isMasterEnabled()) {
-  // Panels
   app.get('/api/panels', requireAuth, async (req, res) => {
-    try {
-      res.json(await dbAll(`SELECT * FROM panels ORDER BY id DESC`));
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await dbAll(`SELECT * FROM panels ORDER BY id DESC`)); }
+    catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.post('/api/panels', requireAuth, async (req, res) => {
@@ -262,7 +310,6 @@ if (isMasterEnabled()) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // Inbounds
   app.get('/api/inbounds', requireAuth, async (req, res) => {
     try {
       const rows = await dbAll(`
@@ -280,12 +327,8 @@ if (isMasterEnabled()) {
       const panelId = Number(req.params.panelId);
       let { tag, port, protocol, host, path, tls, fp, alpn } = req.body;
 
-      if (!port || !protocol || !host || !path) {
-        return res.status(400).json({ error: 'port, protocol, host, path are required' });
-      }
-      if (!['ws', 'xhttp', 'grpc'].includes(protocol)) {
-        return res.status(400).json({ error: 'protocol must be ws|xhttp|grpc' });
-      }
+      if (!port || !protocol || !host || !path) return res.status(400).json({ error: 'port, protocol, host, path are required' });
+      if (!['ws', 'xhttp', 'grpc'].includes(protocol)) return res.status(400).json({ error: 'protocol must be ws|xhttp|grpc' });
 
       path = normalizePath(path);
       if (alpn === 'h2' || alpn === 'h3') alpn = 'http/1.1';
@@ -296,14 +339,8 @@ if (isMasterEnabled()) {
       let remoteInboundId = '';
       if (Number(panel.is_remote) === 1) {
         const r = await remoteCall(panel, 'POST', '/agent/inbounds', {
-          tag: tag || '',
-          port: String(port),
-          protocol,
-          host: String(host).trim(),
-          path,
-          tls: tls || 'tls',
-          fp: fp || 'chrome',
-          alpn: alpn || 'http/1.1'
+          tag: tag || '', port: String(port), protocol, host: String(host).trim(), path,
+          tls: tls || 'tls', fp: fp || 'chrome', alpn: alpn || 'http/1.1'
         });
         remoteInboundId = String(r.remote_inbound_id || r.id || '');
       }
@@ -323,26 +360,18 @@ if (isMasterEnabled()) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // Anti-filter preset: create 3 inbounds at once
   app.post('/api/panels/:panelId/inbounds/preset-anti-filter', requireAuth, async (req, res) => {
     try {
       const panelId = Number(req.params.panelId);
       const panel = await getPanelById(panelId);
       if (!panel) return res.status(404).json({ error: 'panel not found' });
 
-      const {
-        host,
-        port = '443',
-        tls = 'tls',
-        fp = 'chrome',
-        tagPrefix = 'af'
-      } = req.body;
-
+      const { host, port = '443', tls = 'tls', fp = 'chrome', tagPrefix = 'af' } = req.body;
       if (!host) return res.status(400).json({ error: 'host is required' });
 
       const presets = [
-        { protocol: 'ws',    path: randomPath('/ws'),    tag: randomTag(`${tagPrefix}-ws`),    alpn: 'http/1.1' },
-        { protocol: 'grpc',  path: randomPath('/grpc'),  tag: randomTag(`${tagPrefix}-grpc`),  alpn: 'http/1.1' },
+        { protocol: 'ws', path: randomPath('/ws'), tag: randomTag(`${tagPrefix}-ws`), alpn: 'http/1.1' },
+        { protocol: 'grpc', path: randomPath('/grpc'), tag: randomTag(`${tagPrefix}-grpc`), alpn: 'http/1.1' },
         { protocol: 'xhttp', path: randomPath('/xhttp'), tag: randomTag(`${tagPrefix}-xhttp`), alpn: 'http/1.1' },
       ];
 
@@ -352,14 +381,8 @@ if (isMasterEnabled()) {
 
         if (Number(panel.is_remote) === 1) {
           const r = await remoteCall(panel, 'POST', '/agent/inbounds', {
-            tag: p.tag,
-            port: String(port),
-            protocol: p.protocol,
-            host: String(host).trim(),
-            path: p.path,
-            tls,
-            fp,
-            alpn: p.alpn
+            tag: p.tag, port: String(port), protocol: p.protocol, host: String(host).trim(),
+            path: p.path, tls, fp, alpn: p.alpn
           });
           remoteInboundId = String(r.remote_inbound_id || r.id || '');
         }
@@ -370,13 +393,7 @@ if (isMasterEnabled()) {
           [panelId, remoteInboundId, p.tag, String(port), p.protocol, String(host).trim(), p.path, tls, fp, p.alpn]
         );
 
-        created.push({
-          id: ins.lastID,
-          remote_inbound_id: remoteInboundId || null,
-          ...p,
-          host,
-          port: String(port)
-        });
+        created.push({ id: ins.lastID, remote_inbound_id: remoteInboundId || null, ...p, host, port: String(port) });
       }
 
       if (Number(panel.is_remote) === 0) {
@@ -390,7 +407,6 @@ if (isMasterEnabled()) {
     }
   });
 
-  // Users
   app.get('/api/users', requireAuth, async (req, res) => {
     try { res.json(await dbAll(`SELECT * FROM users ORDER BY id DESC`)); }
     catch (e) { res.status(500).json({ error: e.message }); }
@@ -401,12 +417,15 @@ if (isMasterEnabled()) {
       const { username, uuid } = req.body;
       if (!username || !uuid) return res.status(400).json({ error: 'username and uuid are required' });
 
-      const ins = await dbRun(`INSERT INTO users (username, uuid) VALUES (?, ?)`, [String(username).trim(), String(uuid).trim()]);
+      const ins = await dbRun(`INSERT INTO users (username, uuid, sub_token) VALUES (?, ?, ?)`, [
+        String(username).trim(),
+        String(uuid).trim(),
+        makeSubToken()
+      ]);
       res.json({ success: true, id: ins.lastID });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // create user and auto-assign to all inbounds of a panel (or only preset tags)
   app.post('/api/panels/:panelId/users/quick-add', requireAuth, async (req, res) => {
     try {
       const panelId = Number(req.params.panelId);
@@ -415,8 +434,14 @@ if (isMasterEnabled()) {
 
       let user = await dbGet(`SELECT * FROM users WHERE uuid = ?`, [String(uuid).trim()]);
       if (!user) {
-        const insU = await dbRun(`INSERT INTO users (username, uuid) VALUES (?, ?)`, [String(username).trim(), String(uuid).trim()]);
+        const insU = await dbRun(
+          `INSERT INTO users (username, uuid, sub_token) VALUES (?, ?, ?)`,
+          [String(username).trim(), String(uuid).trim(), makeSubToken()]
+        );
         user = await dbGet(`SELECT * FROM users WHERE id = ?`, [insU.lastID]);
+      } else if (!user.sub_token) {
+        const t = await ensureUserSubToken(user.id);
+        user.sub_token = t;
       }
 
       const inbs = await dbAll(
@@ -447,6 +472,7 @@ if (isMasterEnabled()) {
         await dbRun(`INSERT OR IGNORE INTO user_inbound_access (user_id, inbound_id) VALUES (?, ?)`, [userId, id]);
       }
 
+      await ensureUserSubToken(userId);
       await syncUserToRelatedRemotes(userId);
       await regenerateXrayConfigLocalOnly();
       restartXray();
@@ -455,11 +481,20 @@ if (isMasterEnabled()) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
+  app.post('/api/users/:userId/reset-sub-token', requireAuth, async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const token = makeSubToken();
+      await dbRun(`UPDATE users SET sub_token = ? WHERE id = ?`, [token, userId]);
+      res.json({ success: true, sub_token: token });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   app.get('/api/users-with-access', requireAuth, async (req, res) => {
     try {
       const rows = await dbAll(`
         SELECT
-          u.id AS user_id, u.username, u.uuid,
+          u.id AS user_id, u.username, u.uuid, u.sub_token,
           i.id AS inbound_id, i.tag, i.protocol, i.host, i.path, i.tls, i.fp, i.alpn,
           i.port AS external_port,
           p.name AS panel_name, p.address, p.is_remote
@@ -470,13 +505,19 @@ if (isMasterEnabled()) {
         ORDER BY u.id DESC, i.id DESC
       `);
 
+      const base = getPublicBaseUrl(req);
       const map = new Map();
+
       for (const r of rows) {
         if (!map.has(r.user_id)) {
+          const token = r.sub_token || makeSubToken();
           map.set(r.user_id, {
             user_id: r.user_id,
             username: r.username,
             uuid: r.uuid,
+            sub_token: token,
+            sub_url: `${base}/sub/${token}`,
+            sub64_url: `${base}/sub64/${token}`,
             inbounds: [],
             links: []
           });
@@ -497,13 +538,24 @@ if (isMasterEnabled()) {
             protocol: r.protocol,
             host: r.host,
             path: r.path,
-            link: buildVlessLink({
-              ...r,
-              username: r.username,
-              panel_name: r.panel_name
-            })
+            link: buildVlessLink({ ...r, username: r.username, panel_name: r.panel_name })
           });
         }
+      }
+
+      // persist tokens if missing in DB
+      for (const u of map.values()) {
+        await ensureUserSubToken(u.user_id);
+      }
+
+      // reload with persisted real tokens for accuracy
+      const users = await dbAll(`SELECT id, sub_token FROM users`);
+      const tokenMap = new Map(users.map(x => [x.id, x.sub_token]));
+      for (const u of map.values()) {
+        const real = tokenMap.get(u.user_id);
+        u.sub_token = real;
+        u.sub_url = `${base}/sub/${real}`;
+        u.sub64_url = `${base}/sub64/${real}`;
       }
 
       res.json(Array.from(map.values()));
@@ -511,7 +563,7 @@ if (isMasterEnabled()) {
   });
 }
 
-// sync one local user to all remote panels related to his selected inbounds
+// sync user to remotes
 async function syncUserToRelatedRemotes(userId) {
   const user = await dbGet(`SELECT * FROM users WHERE id = ?`, [userId]);
   if (!user) throw new Error('user not found');
@@ -524,7 +576,6 @@ async function syncUserToRelatedRemotes(userId) {
     WHERE a.user_id = ?
   `, [userId]);
 
-  // group by remote panel
   const grp = {};
   for (const r of rows) {
     if (Number(r.is_remote) !== 1) continue;
@@ -534,41 +585,28 @@ async function syncUserToRelatedRemotes(userId) {
 
   for (const panelId of Object.keys(grp)) {
     const { panel, inboundRemoteIds } = grp[panelId];
-
     let remoteUserId = null;
     try {
-      const create = await remoteCall(panel, 'POST', '/agent/users', {
-        username: user.username,
-        uuid: user.uuid
-      });
+      const create = await remoteCall(panel, 'POST', '/agent/users', { username: user.username, uuid: user.uuid });
       remoteUserId = Number(create.remote_user_id || create.id);
-    } catch (e) {
+    } catch {
       const find = await remoteCall(panel, 'GET', `/agent/users/find?uuid=${encodeURIComponent(user.uuid)}`);
       remoteUserId = Number(find.remote_user_id || find.id);
     }
-
-    await remoteCall(panel, 'PATCH', `/agent/users/${remoteUserId}/inbounds`, {
-      inboundIds: inboundRemoteIds
-    });
+    await remoteCall(panel, 'PATCH', `/agent/users/${remoteUserId}/inbounds`, { inboundIds: inboundRemoteIds });
   }
 }
 
-// =========================
-// AGENT APIs
-// =========================
+// ========================= AGENT APIs =========================
 if (isAgentEnabled()) {
-  app.get('/agent/health', requireAgent, (req, res) => {
-    res.json({ ok: true, role: NODE_ROLE });
-  });
+  app.get('/agent/health', requireAgent, (req, res) => res.json({ ok: true, role: NODE_ROLE }));
 
   app.get('/agent/users/find', requireAgent, async (req, res) => {
     try {
       const uuid = String(req.query.uuid || '').trim();
       if (!uuid) return res.status(400).json({ error: 'uuid is required' });
-
       const row = await dbGet(`SELECT id, username, uuid FROM users WHERE uuid = ?`, [uuid]);
       if (!row) return res.status(404).json({ error: 'not found' });
-
       res.json({ success: true, remote_user_id: row.id, ...row });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
@@ -576,13 +614,8 @@ if (isAgentEnabled()) {
   app.post('/agent/inbounds', requireAgent, async (req, res) => {
     try {
       let { tag, port, protocol, host, path, tls, fp, alpn } = req.body;
-
-      if (!port || !protocol || !host || !path) {
-        return res.status(400).json({ error: 'port, protocol, host, path are required' });
-      }
-      if (!['ws', 'xhttp', 'grpc'].includes(protocol)) {
-        return res.status(400).json({ error: 'protocol must be ws|xhttp|grpc' });
-      }
+      if (!port || !protocol || !host || !path) return res.status(400).json({ error: 'port, protocol, host, path are required' });
+      if (!['ws', 'xhttp', 'grpc'].includes(protocol)) return res.status(400).json({ error: 'protocol must be ws|xhttp|grpc' });
 
       path = normalizePath(path);
       if (alpn === 'h2' || alpn === 'h3') alpn = 'http/1.1';
@@ -618,7 +651,11 @@ if (isAgentEnabled()) {
       const ex = await dbGet(`SELECT id FROM users WHERE uuid = ?`, [String(uuid).trim()]);
       if (ex) return res.json({ success: true, remote_user_id: ex.id, existed: true });
 
-      const ins = await dbRun(`INSERT INTO users (username, uuid) VALUES (?, ?)`, [String(username).trim(), String(uuid).trim()]);
+      const ins = await dbRun(`INSERT INTO users (username, uuid, sub_token) VALUES (?, ?, ?)`, [
+        String(username).trim(),
+        String(uuid).trim(),
+        makeSubToken()
+      ]);
       res.json({ success: true, remote_user_id: ins.lastID });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
@@ -634,6 +671,7 @@ if (isAgentEnabled()) {
         await dbRun(`INSERT OR IGNORE INTO user_inbound_access (user_id, inbound_id) VALUES (?, ?)`, [userId, id]);
       }
 
+      await ensureUserSubToken(userId);
       await regenerateXrayConfigLocalOnly();
       restartXray();
 
@@ -642,9 +680,7 @@ if (isAgentEnabled()) {
   });
 }
 
-// =========================
-// XRAY CONFIG (LOCAL PANELS ONLY)
-// =========================
+// ========================= XRAY LOCAL CONFIG =========================
 let hostPathToPortMap = {};
 let pathToPortFallback = {};
 let xrayProcess = null;
@@ -660,11 +696,9 @@ function updateRouteMaps(routeRows) {
     pathToPortFallback[path] = internalPort;
   }
 }
-
 function getTargetPort(reqLike) {
   const reqHost = normalizeHost(reqLike.headers?.host || '');
   const reqPath = normalizePath(reqLike.path || reqLike.url || '/');
-
   for (const [key, port] of Object.entries(hostPathToPortMap)) {
     const [h, p] = key.split('|');
     if (h === reqHost && matchPath(reqPath, p)) return port;
@@ -677,9 +711,7 @@ function getTargetPort(reqLike) {
 
 async function regenerateXrayConfigLocalOnly() {
   const rows = await dbAll(`
-    SELECT
-      u.username, u.uuid,
-      i.id AS inbound_id, i.protocol, i.host, i.path
+    SELECT u.username, u.uuid, i.id AS inbound_id, i.protocol, i.host, i.path
     FROM user_inbound_access a
     JOIN users u ON u.id = a.user_id
     JOIN inbounds i ON i.id = a.inbound_id
@@ -699,11 +731,7 @@ async function regenerateXrayConfigLocalOnly() {
         clients: []
       });
     }
-    byInbound.get(r.inbound_id).clients.push({
-      id: r.uuid,
-      email: r.username,
-      flow: ""
-    });
+    byInbound.get(r.inbound_id).clients.push({ id: r.uuid, email: r.username, flow: "" });
   }
 
   const inbounds = [];
@@ -711,40 +739,21 @@ async function regenerateXrayConfigLocalOnly() {
 
   for (const inbound of byInbound.values()) {
     const internalPort = XRAY_BASE_PORT + Number(inbound.inbound_id);
-
     const ib = {
       listen: "127.0.0.1",
       port: internalPort,
       protocol: "vless",
-      settings: {
-        clients: inbound.clients,
-        decryption: "none"
-      },
-      streamSettings: {
-        network: inbound.protocol,
-        security: "none"
-      },
-      sniffing: {
-        enabled: true,
-        destOverride: ["http", "tls"]
-      }
+      settings: { clients: inbound.clients, decryption: "none" },
+      streamSettings: { network: inbound.protocol, security: "none" },
+      sniffing: { enabled: true, destOverride: ["http", "tls"] }
     };
 
     if (inbound.protocol === 'ws') {
-      ib.streamSettings.wsSettings = {
-        path: inbound.path,
-        headers: { Host: inbound.host }
-      };
+      ib.streamSettings.wsSettings = { path: inbound.path, headers: { Host: inbound.host } };
     } else if (inbound.protocol === 'xhttp') {
-      ib.streamSettings.xhttpSettings = {
-        path: inbound.path,
-        host: inbound.host,
-        mode: "auto"
-      };
+      ib.streamSettings.xhttpSettings = { path: inbound.path, host: inbound.host, mode: "auto" };
     } else if (inbound.protocol === 'grpc') {
-      ib.streamSettings.grpcSettings = {
-        serviceName: inbound.path.replace(/^\//, '')
-      };
+      ib.streamSettings.grpcSettings = { serviceName: inbound.path.replace(/^\//, '') };
     }
 
     inbounds.push(ib);
@@ -756,25 +765,15 @@ async function regenerateXrayConfigLocalOnly() {
       listen: "127.0.0.1",
       port: XRAY_BASE_PORT,
       protocol: "vless",
-      settings: {
-        clients: [{ id: "00000000-0000-0000-0000-000000000000" }],
-        decryption: "none"
-      },
-      streamSettings: {
-        network: "ws",
-        security: "none",
-        wsSettings: { path: "/none" }
-      }
+      settings: { clients: [{ id: "00000000-0000-0000-0000-000000000000" }], decryption: "none" },
+      streamSettings: { network: "ws", security: "none", wsSettings: { path: "/none" } }
     });
   }
 
   const config = {
     log: { loglevel: "warning" },
     inbounds,
-    outbounds: [
-      { protocol: "freedom", tag: "direct" },
-      { protocol: "blackhole", tag: "block" }
-    ]
+    outbounds: [{ protocol: "freedom", tag: "direct" }, { protocol: "blackhole", tag: "block" }]
   };
 
   fs.writeFileSync(XRAY_CONFIG_PATH, JSON.stringify(config, null, 2));
@@ -782,10 +781,7 @@ async function regenerateXrayConfigLocalOnly() {
 }
 
 function restartXray() {
-  if (xrayProcess) {
-    xrayProcess.kill();
-    xrayProcess = null;
-  }
+  if (xrayProcess) { xrayProcess.kill(); xrayProcess = null; }
   if (!fs.existsSync(XRAY_CONFIG_PATH)) return;
 
   xrayProcess = spawn(XRAY_BIN, ['-c', XRAY_CONFIG_PATH]);
@@ -794,9 +790,7 @@ function restartXray() {
   xrayProcess.on('exit', code => console.log('Xray exited with code', code));
 }
 
-// =========================
-// PROXY (LAST ROUTE)
-// =========================
+// ========================= PROXY =========================
 app.use((req, res) => {
   const targetPort = getTargetPort(req);
   if (!targetPort) return res.status(404).send('Not found');
@@ -854,11 +848,13 @@ server.on('upgrade', (req, socket, head) => {
   req.pipe(proxyReq);
 });
 
-// =========================
-// BOOT
-// =========================
+// ========================= BOOT =========================
 (async () => {
   try {
+    // ensure all users have sub_token
+    const us = await dbAll(`SELECT id, uuid FROM users`);
+    for (const u of us) await ensureUserSubTokenByUuid(u.uuid);
+
     await regenerateXrayConfigLocalOnly();
     restartXray();
 
@@ -866,9 +862,6 @@ server.on('upgrade', (req, socket, head) => {
       console.log(`✅ Panel running on :${PORT}`);
       console.log(`Role: ${NODE_ROLE}`);
       console.log(`Admin: ${ADMIN_USER}`);
-      if (isAgentEnabled()) {
-        console.log(`Agent enabled. AGENT_KEY set: ${AGENT_KEY !== 'change-me-agent-key'}`);
-      }
     });
   } catch (e) {
     console.error('Boot error:', e);
