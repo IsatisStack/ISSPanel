@@ -1,10 +1,10 @@
+<!-- public/dash-view.html -->
 <!DOCTYPE html>
 <html lang="fa" dir="rtl" data-theme="light">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ISSPanel - Dashboard</title>
+  <title>ISSPanel Dashboard</title>
 
   <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" />
@@ -16,15 +16,14 @@
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   </style>
 </head>
-
 <body class="bg-base-200">
   <div class="max-w-7xl mx-auto p-3 md:p-5">
 
     <!-- Header -->
-    <div class="bg-base-100 rounded-xl shadow p-4 flex flex-col lg:flex-row justify-between gap-3">
+    <div class="bg-base-100 rounded-xl shadow p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
       <div>
         <h1 class="text-xl md:text-2xl font-bold">ISSPanel - Master/Remote</h1>
-        <p class="text-xs opacity-70">مدیریت مرکزی پنل‌ها + ساخت کانفیگ مقاوم برای ISPهای مختلف</p>
+        <p class="text-xs opacity-70">Subscription QR فعال شد (QR کوتاه و پایدار)</p>
       </div>
       <div class="flex gap-2">
         <button class="btn btn-sm" onclick="refreshAll()">بروزرسانی</button>
@@ -37,9 +36,9 @@
       <button class="btn btn-primary" onclick="panel_modal.showModal()">+ پنل</button>
       <button class="btn btn-secondary" onclick="inbound_modal.showModal()">+ اینباند</button>
       <button class="btn btn-success" onclick="user_modal.showModal()">+ کاربر</button>
-      <button class="btn btn-accent" onclick="assign_modal.showModal(); fillAssignUsers();">+ تخصیص</button>
+      <button class="btn btn-accent" onclick="assign_modal.showModal(); fillAssignUsers()">+ تخصیص</button>
       <button class="btn btn-warning" onclick="preset_modal.showModal(); fillPanelSelects()">پریست ضد فیلتر</button>
-      <button class="btn btn-info" onclick="quick_user_modal.showModal(); fillPanelSelects()">کاربر سریع روی پنل</button>
+      <button class="btn btn-info" onclick="quick_user_modal.showModal(); fillPanelSelects()">کاربر سریع</button>
     </div>
 
     <!-- Stats -->
@@ -71,13 +70,10 @@
           <label class="label">جستجوی کاربر</label>
           <input id="filterUser" class="input input-bordered w-full" placeholder="username..." oninput="renderUsersTable()" />
         </div>
-        <div class="text-xs opacity-70 mt-8">
-          برای مشکل بعضی ISPها، از دکمه «پریست ضد فیلتر» استفاده کن.
-        </div>
       </div>
     </div>
 
-    <!-- Table -->
+    <!-- Users Table -->
     <div class="bg-base-100 rounded-xl shadow p-3 mt-4">
       <div class="overflow-x-auto">
         <table class="table table-zebra">
@@ -104,9 +100,15 @@
   <!-- QR Modal -->
   <dialog id="qr_modal" class="modal">
     <div class="modal-box max-w-md">
-      <h3 class="font-bold text-lg mb-2">QR Code</h3>
-      <div class="flex justify-center"><div id="qrcode" class="bg-white p-2 rounded"></div></div>
-      <button class="btn btn-sm w-full mt-3" onclick="copyText(currentQrText)">کپی متن QR</button>
+      <h3 class="font-bold text-lg mb-2">QR لینک Subscription</h3>
+      <p class="text-xs opacity-70 mb-3">این QR کوتاه است و مشکل سفید شدن ندارد.</p>
+      <div class="flex justify-center">
+        <div id="qrcode" class="bg-white p-2 rounded"></div>
+      </div>
+      <div id="qrTextPreview" class="text-[11px] mt-2 opacity-70 break-all"></div>
+      <div class="mt-3">
+        <button class="btn btn-sm w-full" onclick="copyText(currentQrText)">کپی لینک Subscription</button>
+      </div>
       <form method="dialog" class="mt-2"><button class="btn w-full">بستن</button></form>
     </div>
   </dialog>
@@ -238,23 +240,14 @@
     </div>
   </dialog>
 
-  <!-- Anti-filter Preset -->
+  <!-- Preset -->
   <dialog id="preset_modal" class="modal">
     <div class="modal-box max-w-2xl">
       <h3 class="font-bold text-lg mb-3">ساخت پریست ضد فیلتر (۳ اینباند)</h3>
       <form id="presetForm" class="grid md:grid-cols-2 gap-3">
-        <div>
-          <label class="label">پنل</label>
-          <select name="panel_id" id="preset_panel_id" class="select select-bordered w-full" required></select>
-        </div>
-        <div>
-          <label class="label">Port</label>
-          <input name="port" value="443" class="input input-bordered w-full" required />
-        </div>
-        <div class="md:col-span-2">
-          <label class="label">Host</label>
-          <input name="host" class="input input-bordered w-full" placeholder="us.example.com" required />
-        </div>
+        <div><label class="label">پنل</label><select name="panel_id" id="preset_panel_id" class="select select-bordered w-full" required></select></div>
+        <div><label class="label">Port</label><input name="port" value="443" class="input input-bordered w-full" required /></div>
+        <div class="md:col-span-2"><label class="label">Host</label><input name="host" class="input input-bordered w-full" required /></div>
         <div>
           <label class="label">TLS</label>
           <select name="tls" class="select select-bordered w-full">
@@ -271,10 +264,7 @@
             <option value="randomized">randomized</option>
           </select>
         </div>
-        <div class="md:col-span-2">
-          <label class="label">Tag Prefix</label>
-          <input name="tagPrefix" value="af" class="input input-bordered w-full" />
-        </div>
+        <div class="md:col-span-2"><label class="label">Tag Prefix</label><input name="tagPrefix" value="af" class="input input-bordered w-full" /></div>
         <button class="btn btn-warning md:col-span-2">ایجاد پریست</button>
       </form>
       <form method="dialog" class="mt-2"><button class="btn w-full">بستن</button></form>
@@ -284,20 +274,11 @@
   <!-- Quick User -->
   <dialog id="quick_user_modal" class="modal">
     <div class="modal-box max-w-2xl">
-      <h3 class="font-bold text-lg mb-3">ساخت کاربر سریع + تخصیص خودکار</h3>
+      <h3 class="font-bold text-lg mb-3">کاربر سریع + تخصیص خودکار</h3>
       <form id="quickUserForm" class="grid md:grid-cols-2 gap-3">
-        <div>
-          <label class="label">پنل</label>
-          <select name="panel_id" id="quick_panel_id" class="select select-bordered w-full" required></select>
-        </div>
-        <div>
-          <label class="label">Tag Prefix (اختیاری)</label>
-          <input name="onlyTagPrefix" value="af" class="input input-bordered w-full" />
-        </div>
-        <div>
-          <label class="label">Username</label>
-          <input name="username" class="input input-bordered w-full" required />
-        </div>
+        <div><label class="label">پنل</label><select name="panel_id" id="quick_panel_id" class="select select-bordered w-full" required></select></div>
+        <div><label class="label">Tag Prefix (اختیاری)</label><input name="onlyTagPrefix" value="af" class="input input-bordered w-full" /></div>
+        <div><label class="label">Username</label><input name="username" class="input input-bordered w-full" required /></div>
         <div>
           <label class="label">UUID</label>
           <div class="flex gap-2">
@@ -328,12 +309,7 @@
     }
 
     function esc(str = '') {
-      return String(str)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+      return String(str).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
     }
 
     function showResult(data) {
@@ -372,14 +348,9 @@
       currentQrText = text || '';
       const q = document.getElementById('qrcode');
       q.innerHTML = '';
+      document.getElementById('qrTextPreview').textContent = currentQrText;
       qr_modal.showModal();
-
-      new QRCode(q, {
-        text: currentQrText,
-        width: 260,
-        height: 260,
-        correctLevel: QRCode.CorrectLevel.M
-      });
+      new QRCode(q, { text: currentQrText, width: 260, height: 260, correctLevel: QRCode.CorrectLevel.M });
     }
 
     function toggleRemoteFields() {
@@ -455,8 +426,8 @@
           <label class="label cursor-pointer justify-start gap-2 bg-base-100 border rounded px-2 py-2">
             <input class="checkbox checkbox-sm assign-inbound" type="checkbox" value="${i.id}" ${ch}>
             <span class="text-sm">
-              <b>${esc(i.panel_name)}</b> ${Number(i.is_remote)?'🛰️':'🏠'} |
-              ${esc(i.protocol)} | ${esc(i.host)}${esc(i.path)} | ${esc(i.tag||'-')}
+              <b>${esc(i.panel_name)}</b> ${Number(i.is_remote) ? '🛰️' : '🏠'} |
+              ${esc(i.protocol)} | ${esc(i.host)}${esc(i.path)} | ${esc(i.tag || '-')}
             </span>
           </label>
         `;
@@ -483,22 +454,30 @@
       if (fPanel) data = data.filter(u => (u.inbounds || []).some(i => i.panel_name === fPanel));
 
       data.forEach((u, idx) => {
-        const accessHtml = (u.inbounds || []).map(i => {
-          const remote = panels.find(p => p.name === i.panel_name)?.is_remote == 1;
-          return `<span class="badge badge-outline m-1">${esc(i.panel_name)} ${remote?'🛰️':'🏠'} | ${esc(i.protocol)} | ${esc(i.host)}${esc(i.path)}</span>`;
+        const inbHtml = (u.inbounds || []).map(i => {
+          const remote = i.is_remote ? '🛰️' : '🏠';
+          return `<span class="badge badge-outline m-1">${esc(i.panel_name)} ${remote} | ${esc(i.protocol)} | ${esc(i.host)}${esc(i.path)}</span>`;
         }).join('') || '-';
 
         const allLinks = (u.links || []).map(l => l.link).join('\n');
+        const subUrl = u.sub_url || '';
+        const sub64Url = u.sub64_url || '';
+
         const actionsHtml = (u.links && u.links.length) ? `
           <div class="flex flex-col gap-2">
-            <div class="flex gap-2">
-              <button class="btn btn-xs btn-primary" onclick='copyText(${JSON.stringify(allLinks)})'>کپی همه (${u.links.length})</button>
-              <button class="btn btn-xs btn-outline" onclick='showQr(${JSON.stringify(allLinks)})'>QR</button>
+            <div class="flex flex-wrap gap-2">
+              <button class="btn btn-xs btn-primary" onclick='copyText(${JSON.stringify(allLinks)})'>کپی همه لینک‌ها (${u.links.length})</button>
+              <button class="btn btn-xs btn-outline" onclick='copyText(${JSON.stringify(subUrl)})'>کپی Subscription</button>
+              <button class="btn btn-xs btn-outline" onclick='copyText(${JSON.stringify(sub64Url)})'>کپی Sub64</button>
+              <button class="btn btn-xs btn-info" onclick='showQr(${JSON.stringify(subUrl)})'>QR Subscription</button>
             </div>
             <details class="collapse collapse-arrow bg-base-200">
               <summary class="collapse-title text-xs">نمایش لینک‌ها</summary>
               <div class="collapse-content">
                 <pre class="text-[10px] whitespace-pre-wrap break-all">${esc(allLinks)}</pre>
+                <div class="divider my-2"></div>
+                <div class="text-[11px] break-all"><b>Sub:</b> ${esc(subUrl)}</div>
+                <div class="text-[11px] break-all"><b>Sub64:</b> ${esc(sub64Url)}</div>
               </div>
             </details>
           </div>
@@ -509,7 +488,7 @@
             <td>${idx + 1}</td>
             <td>${esc(u.username)}</td>
             <td class="mono text-xs">${esc(u.uuid)}</td>
-            <td>${accessHtml}</td>
+            <td>${inbHtml}</td>
             <td>${actionsHtml}</td>
           </tr>
         `;
@@ -520,14 +499,18 @@
     document.getElementById('panelForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(e.target));
-      if (String(data.is_remote) !== '1') { data.api_base = ''; data.api_key = ''; }
+      if (String(data.is_remote) !== '1') {
+        data.api_base = '';
+        data.api_key = '';
+      }
       try {
         showResult(await api('/api/panels', {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         }));
-        e.target.reset(); toggleRemoteFields();
+        e.target.reset();
+        toggleRemoteFields();
         await refreshAll();
       } catch (err) { alert(err.message); }
     });
@@ -535,11 +518,12 @@
     document.getElementById('inboundForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(e.target));
-      const panelId = data.panel_id; delete data.panel_id;
+      const panelId = data.panel_id;
+      delete data.panel_id;
       try {
         showResult(await api(`/api/panels/${panelId}/inbounds`, {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         }));
         e.target.reset();
@@ -553,7 +537,7 @@
       try {
         showResult(await api('/api/users', {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         }));
         e.target.reset();
@@ -569,37 +553,37 @@
       try {
         showResult(await api(`/api/users/${uid}/inbounds`, {
           method: 'PATCH',
-          headers: {'Content-Type':'application/json'},
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ inboundIds })
         }));
         await refreshAll();
       } catch (err) { alert(err.message); }
     });
 
-    // Anti-filter preset form
     document.getElementById('presetForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(e.target));
-      const panelId = data.panel_id; delete data.panel_id;
+      const panelId = data.panel_id;
+      delete data.panel_id;
       try {
         showResult(await api(`/api/panels/${panelId}/inbounds/preset-anti-filter`, {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         }));
         await refreshAll();
       } catch (err) { alert(err.message); }
     });
 
-    // Quick user form
     document.getElementById('quickUserForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(e.target));
-      const panelId = data.panel_id; delete data.panel_id;
+      const panelId = data.panel_id;
+      delete data.panel_id;
       try {
         showResult(await api(`/api/panels/${panelId}/users/quick-add`, {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         }));
         e.target.reset();
