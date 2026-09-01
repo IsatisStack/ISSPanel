@@ -6,14 +6,15 @@ const cookieParser = require('cookie-parser');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
 
-// Node 18+ native fetch
+// Node 18+ (native fetch)
 const fetchFn = global.fetch ? global.fetch.bind(global) : null;
 if (!fetchFn) {
-  console.error('❌ This build requires Node.js 18+ (for fetch).');
+  console.error('❌ Node.js 18+ required (fetch).');
   process.exit(1);
 }
 
@@ -29,6 +30,9 @@ const XRAY_BASE_PORT = parseInt(process.env.XRAY_BASE_PORT || '10086', 10);
 const DB_PATH = process.env.DB_PATH || './data/configs.db';
 const COOKIE_NAME = 'panel_auth';
 const COOKIE_VALUE = 'authenticated';
+
+const XRAY_CONFIG_PATH = process.env.XRAY_CONFIG_PATH || '/tmp/xray-config.json';
+const XRAY_BIN = process.env.XRAY_BIN || 'xray';
 
 if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
 
@@ -48,9 +52,9 @@ db.serialize(() => {
     CREATE TABLE IF NOT EXISTS panels (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      address TEXT NOT NULL,        -- domain/ip for links
-      is_remote INTEGER DEFAULT 0,  -- 0 local / 1 remote-agent
-      api_base TEXT DEFAULT '',     -- e.g. https://us.example.com
+      address TEXT NOT NULL,
+      is_remote INTEGER DEFAULT 0,
+      api_base TEXT DEFAULT '',
       api_key TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -60,14 +64,14 @@ db.serialize(() => {
     CREATE TABLE IF NOT EXISTS inbounds (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       panel_id INTEGER NOT NULL,
-      remote_inbound_id TEXT DEFAULT '',  -- id on remote agent
+      remote_inbound_id TEXT DEFAULT '',
       tag TEXT DEFAULT '',
-      port TEXT NOT NULL,                 -- external port for links
-      protocol TEXT NOT NULL,             -- ws|xhttp|grpc
+      port TEXT NOT NULL,
+      protocol TEXT NOT NULL, -- ws | xhttp | grpc
       host TEXT NOT NULL,
       path TEXT NOT NULL,
-      tls TEXT DEFAULT 'none',
-      fp TEXT DEFAULT '',
+      tls TEXT DEFAULT 'tls',
+      fp TEXT DEFAULT 'chrome',
       alpn TEXT DEFAULT 'http/1.1',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(panel_id) REFERENCES panels(id) ON DELETE CASCADE
@@ -77,7 +81,6 @@ db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      remote_user_id TEXT DEFAULT '',     -- id on remote agent (optional)
       username TEXT NOT NULL UNIQUE,
       uuid TEXT NOT NULL UNIQUE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -112,7 +115,7 @@ function requireAgent(req, res, next) {
 }
 
 // =========================
-// HELPERS
+// BASIC HELPERS
 // =========================
 function isMasterEnabled() {
   return NODE_ROLE === 'master' || NODE_ROLE === 'hybrid';
@@ -135,6 +138,13 @@ function matchPath(reqPath, basePath) {
 }
 function makeHostPathKey(host, path) {
   return `${normalizeHost(host)}|${normalizePath(path)}`;
+}
+function randomPath(prefix = '/v') {
+  const r = crypto.randomBytes(8).toString('hex');
+  return normalizePath(`${prefix}-${r}`);
+}
+function randomTag(prefix = 'ib') {
+  return `${prefix}-${crypto.randomBytes(3).toString('hex')}`;
 }
 
 function dbGet(sql, params = []) {
@@ -185,31 +195,33 @@ async function remoteCall(panel, method, path, body) {
 function buildVlessLink(row) {
   const params = new URLSearchParams();
   params.set('encryption', 'none');
-  params.set('security', row.tls || 'none');
+  params.set('security', row.tls || 'tls');
   params.set('sni', row.host);
   if (row.fp) params.set('fp', row.fp);
   if (row.alpn) params.set('alpn', row.alpn);
-  params.set('insecure', '0');
-  params.set('allowInsecure', '0');
   params.set('type', row.protocol);
   params.set('host', row.host);
   params.set('path', row.path);
-  if (row.protocol === 'xhttp') params.set('mode', 'auto');
+  params.set('allowInsecure', '0');
+
+  if (row.protocol === 'grpc') {
+    params.delete('path');
+    params.set('serviceName', row.path.replace(/^\//, ''));
+  }
+  if (row.protocol === 'xhttp') {
+    params.set('mode', 'auto');
+  }
 
   const label = `${row.username}-${row.panel_name || 'panel'}-${row.tag || ('inb' + row.inbound_id)}`;
   return `vless://${row.uuid}@${row.address}:${row.external_port}?${params.toString()}#${encodeURIComponent(label)}`;
 }
 
 // =========================
-// WEB / LOGIN
+// WEB
 // =========================
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/public/index.html');
-});
-
-app.get('/dash', (req, res) => {
-  res.sendFile(__dirname + '/public/dash.html');
-});
+app.get('/', (req, res) => res.sendFile(__dirname + '/public/index.html'));
+app.get('/dash', (req, res) => res.sendFile(__dirname + '/public/dash.html'));
+app.get('/dash/view', requireAuth, (req, res) => res.sendFile(__dirname + '/public/dash-view.html'));
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -217,16 +229,12 @@ app.post('/login', (req, res) => {
     res.cookie(COOKIE_NAME, COOKIE_VALUE, { httpOnly: true });
     return res.redirect('/dash/view');
   }
-  res.status(401).send('نام کاربری یا رمز عبور اشتباه است. <a href="/dash">بازگشت</a>');
+  return res.status(401).send('نام کاربری یا رمز عبور اشتباه است. <a href="/dash">بازگشت</a>');
 });
 
 app.get('/logout', (req, res) => {
   res.clearCookie(COOKIE_NAME);
   res.redirect('/dash');
-});
-
-app.get('/dash/view', requireAuth, (req, res) => {
-  res.sendFile(__dirname + '/public/dash-view.html');
 });
 
 // =========================
@@ -236,11 +244,8 @@ if (isMasterEnabled()) {
   // Panels
   app.get('/api/panels', requireAuth, async (req, res) => {
     try {
-      const rows = await dbAll(`SELECT * FROM panels ORDER BY id DESC`);
-      res.json(rows);
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+      res.json(await dbAll(`SELECT * FROM panels ORDER BY id DESC`));
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.post('/api/panels', requireAuth, async (req, res) => {
@@ -249,15 +254,12 @@ if (isMasterEnabled()) {
       if (!name || !address) return res.status(400).json({ error: 'name and address are required' });
 
       const remote = Number(is_remote || 0) ? 1 : 0;
-      const result = await dbRun(
+      const ins = await dbRun(
         `INSERT INTO panels (name, address, is_remote, api_base, api_key) VALUES (?, ?, ?, ?, ?)`,
         [String(name).trim(), String(address).trim(), remote, api_base || '', api_key || '']
       );
-
-      res.json({ success: true, id: result.lastID });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+      res.json({ success: true, id: ins.lastID });
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   // Inbounds
@@ -270,18 +272,7 @@ if (isMasterEnabled()) {
         ORDER BY i.id DESC
       `);
       res.json(rows);
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.get('/api/panels/:panelId/inbounds', requireAuth, async (req, res) => {
-    try {
-      const rows = await dbAll(`SELECT * FROM inbounds WHERE panel_id = ? ORDER BY id DESC`, [req.params.panelId]);
-      res.json(rows);
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.post('/api/panels/:panelId/inbounds', requireAuth, async (req, res) => {
@@ -303,8 +294,6 @@ if (isMasterEnabled()) {
       if (!panel) return res.status(404).json({ error: 'panel not found' });
 
       let remoteInboundId = '';
-
-      // اگر پنل ریموت بود، اول روی Agent بساز
       if (Number(panel.is_remote) === 1) {
         const r = await remoteCall(panel, 'POST', '/agent/inbounds', {
           tag: tag || '',
@@ -312,38 +301,90 @@ if (isMasterEnabled()) {
           protocol,
           host: String(host).trim(),
           path,
-          tls: tls || 'none',
-          fp: fp || '',
+          tls: tls || 'tls',
+          fp: fp || 'chrome',
           alpn: alpn || 'http/1.1'
         });
         remoteInboundId = String(r.remote_inbound_id || r.id || '');
       }
 
-      // در DB master هم ثبت شود
       const ins = await dbRun(
         `INSERT INTO inbounds (panel_id, remote_inbound_id, tag, port, protocol, host, path, tls, fp, alpn)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          panelId,
-          remoteInboundId,
-          tag || '',
-          String(port),
-          protocol,
-          String(host).trim(),
-          path,
-          tls || 'none',
-          fp || '',
-          alpn || 'http/1.1'
-        ]
+        [panelId, remoteInboundId, tag || '', String(port), protocol, String(host).trim(), path, tls || 'tls', fp || 'chrome', alpn || 'http/1.1']
       );
 
-      // برای local panel باید xray local regenerate شود
       if (Number(panel.is_remote) === 0) {
         await regenerateXrayConfigLocalOnly();
         restartXray();
       }
 
       res.json({ success: true, id: ins.lastID, remote_inbound_id: remoteInboundId || null });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Anti-filter preset: create 3 inbounds at once
+  app.post('/api/panels/:panelId/inbounds/preset-anti-filter', requireAuth, async (req, res) => {
+    try {
+      const panelId = Number(req.params.panelId);
+      const panel = await getPanelById(panelId);
+      if (!panel) return res.status(404).json({ error: 'panel not found' });
+
+      const {
+        host,
+        port = '443',
+        tls = 'tls',
+        fp = 'chrome',
+        tagPrefix = 'af'
+      } = req.body;
+
+      if (!host) return res.status(400).json({ error: 'host is required' });
+
+      const presets = [
+        { protocol: 'ws',    path: randomPath('/ws'),    tag: randomTag(`${tagPrefix}-ws`),    alpn: 'http/1.1' },
+        { protocol: 'grpc',  path: randomPath('/grpc'),  tag: randomTag(`${tagPrefix}-grpc`),  alpn: 'http/1.1' },
+        { protocol: 'xhttp', path: randomPath('/xhttp'), tag: randomTag(`${tagPrefix}-xhttp`), alpn: 'http/1.1' },
+      ];
+
+      const created = [];
+      for (const p of presets) {
+        let remoteInboundId = '';
+
+        if (Number(panel.is_remote) === 1) {
+          const r = await remoteCall(panel, 'POST', '/agent/inbounds', {
+            tag: p.tag,
+            port: String(port),
+            protocol: p.protocol,
+            host: String(host).trim(),
+            path: p.path,
+            tls,
+            fp,
+            alpn: p.alpn
+          });
+          remoteInboundId = String(r.remote_inbound_id || r.id || '');
+        }
+
+        const ins = await dbRun(
+          `INSERT INTO inbounds (panel_id, remote_inbound_id, tag, port, protocol, host, path, tls, fp, alpn)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [panelId, remoteInboundId, p.tag, String(port), p.protocol, String(host).trim(), p.path, tls, fp, p.alpn]
+        );
+
+        created.push({
+          id: ins.lastID,
+          remote_inbound_id: remoteInboundId || null,
+          ...p,
+          host,
+          port: String(port)
+        });
+      }
+
+      if (Number(panel.is_remote) === 0) {
+        await regenerateXrayConfigLocalOnly();
+        restartXray();
+      }
+
+      res.json({ success: true, created });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -351,12 +392,8 @@ if (isMasterEnabled()) {
 
   // Users
   app.get('/api/users', requireAuth, async (req, res) => {
-    try {
-      const rows = await dbAll(`SELECT * FROM users ORDER BY id DESC`);
-      res.json(rows);
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    try { res.json(await dbAll(`SELECT * FROM users ORDER BY id DESC`)); }
+    catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.post('/api/users', requireAuth, async (req, res) => {
@@ -364,15 +401,39 @@ if (isMasterEnabled()) {
       const { username, uuid } = req.body;
       if (!username || !uuid) return res.status(400).json({ error: 'username and uuid are required' });
 
-      const ins = await dbRun(
-        `INSERT INTO users (username, uuid) VALUES (?, ?)`,
-        [String(username).trim(), String(uuid).trim()]
+      const ins = await dbRun(`INSERT INTO users (username, uuid) VALUES (?, ?)`, [String(username).trim(), String(uuid).trim()]);
+      res.json({ success: true, id: ins.lastID });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // create user and auto-assign to all inbounds of a panel (or only preset tags)
+  app.post('/api/panels/:panelId/users/quick-add', requireAuth, async (req, res) => {
+    try {
+      const panelId = Number(req.params.panelId);
+      const { username, uuid, onlyTagPrefix = '' } = req.body;
+      if (!username || !uuid) return res.status(400).json({ error: 'username and uuid are required' });
+
+      let user = await dbGet(`SELECT * FROM users WHERE uuid = ?`, [String(uuid).trim()]);
+      if (!user) {
+        const insU = await dbRun(`INSERT INTO users (username, uuid) VALUES (?, ?)`, [String(username).trim(), String(uuid).trim()]);
+        user = await dbGet(`SELECT * FROM users WHERE id = ?`, [insU.lastID]);
+      }
+
+      const inbs = await dbAll(
+        `SELECT * FROM inbounds WHERE panel_id = ? ${onlyTagPrefix ? 'AND tag LIKE ?' : ''} ORDER BY id DESC`,
+        onlyTagPrefix ? [panelId, `${onlyTagPrefix}%`] : [panelId]
       );
 
-      res.json({ success: true, id: ins.lastID });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+      for (const i of inbs) {
+        await dbRun(`INSERT OR IGNORE INTO user_inbound_access (user_id, inbound_id) VALUES (?, ?)`, [user.id, i.id]);
+      }
+
+      await syncUserToRelatedRemotes(user.id);
+      await regenerateXrayConfigLocalOnly();
+      restartXray();
+
+      res.json({ success: true, user_id: user.id, assigned_count: inbs.length });
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.patch('/api/users/:userId/inbounds', requireAuth, async (req, res) => {
@@ -381,66 +442,17 @@ if (isMasterEnabled()) {
       const { inboundIds } = req.body;
       if (!Array.isArray(inboundIds)) return res.status(400).json({ error: 'inboundIds must be array' });
 
-      // 1) replace local mapping
       await dbRun(`DELETE FROM user_inbound_access WHERE user_id = ?`, [userId]);
-      for (const inbId of inboundIds) {
-        await dbRun(
-          `INSERT OR IGNORE INTO user_inbound_access (user_id, inbound_id) VALUES (?, ?)`,
-          [userId, Number(inbId)]
-        );
+      for (const id of inboundIds.map(Number)) {
+        await dbRun(`INSERT OR IGNORE INTO user_inbound_access (user_id, inbound_id) VALUES (?, ?)`, [userId, id]);
       }
 
-      // 2) sync to remotes grouped by panel
-      const rows = await dbAll(`
-        SELECT i.id AS inbound_id, i.remote_inbound_id, i.panel_id, p.is_remote, p.api_base, p.api_key
-        FROM inbounds i
-        JOIN panels p ON p.id = i.panel_id
-        WHERE i.id IN (${inboundIds.length ? inboundIds.map(() => '?').join(',') : 'NULL'})
-      `, inboundIds.map(Number));
-
-      const user = await dbGet(`SELECT * FROM users WHERE id = ?`, [userId]);
-      if (!user) return res.status(404).json({ error: 'user not found' });
-
-      // ساخت کاربر روی هر ریموت (idempotent ساده: تلاش به create و در صورت خطا ادامه)
-      const remotePanels = {};
-      for (const r of rows) {
-        if (Number(r.is_remote) === 1) {
-          if (!remotePanels[r.panel_id]) remotePanels[r.panel_id] = { panel: r, inboundRemoteIds: [] };
-          if (r.remote_inbound_id) remotePanels[r.panel_id].inboundRemoteIds.push(Number(r.remote_inbound_id));
-        }
-      }
-
-      for (const pid of Object.keys(remotePanels)) {
-        const panel = remotePanels[pid].panel;
-        const inboundRemoteIds = remotePanels[pid].inboundRemoteIds;
-
-        // ensure remote user exists (simple create-first)
-        let remoteUserId = null;
-        try {
-          const ru = await remoteCall(panel, 'POST', '/agent/users', {
-            username: user.username,
-            uuid: user.uuid
-          });
-          remoteUserId = Number(ru.remote_user_id || ru.id);
-        } catch (e) {
-          // اگر user duplicate بود، تلاش برای find
-          const find = await remoteCall(panel, 'GET', `/agent/users/find?uuid=${encodeURIComponent(user.uuid)}`);
-          remoteUserId = Number(find.remote_user_id || find.id);
-        }
-
-        await remoteCall(panel, 'PATCH', `/agent/users/${remoteUserId}/inbounds`, {
-          inboundIds: inboundRemoteIds
-        });
-      }
-
-      // 3) regenerate local xray فقط برای inboundهای local
+      await syncUserToRelatedRemotes(userId);
       await regenerateXrayConfigLocalOnly();
       restartXray();
 
       res.json({ success: true });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   app.get('/api/users-with-access', requireAuth, async (req, res) => {
@@ -470,8 +482,8 @@ if (isMasterEnabled()) {
           });
         }
         if (r.inbound_id) {
-          const item = map.get(r.user_id);
-          item.inbounds.push({
+          const m = map.get(r.user_id);
+          m.inbounds.push({
             inbound_id: r.inbound_id,
             tag: r.tag,
             protocol: r.protocol,
@@ -480,7 +492,7 @@ if (isMasterEnabled()) {
             panel_name: r.panel_name,
             is_remote: Number(r.is_remote) === 1
           });
-          item.links.push({
+          m.links.push({
             inbound_id: r.inbound_id,
             protocol: r.protocol,
             host: r.host,
@@ -495,22 +507,60 @@ if (isMasterEnabled()) {
       }
 
       res.json(Array.from(map.values()));
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }
 
+// sync one local user to all remote panels related to his selected inbounds
+async function syncUserToRelatedRemotes(userId) {
+  const user = await dbGet(`SELECT * FROM users WHERE id = ?`, [userId]);
+  if (!user) throw new Error('user not found');
+
+  const rows = await dbAll(`
+    SELECT i.id AS inbound_id, i.remote_inbound_id, i.panel_id, p.*
+    FROM user_inbound_access a
+    JOIN inbounds i ON i.id = a.inbound_id
+    JOIN panels p ON p.id = i.panel_id
+    WHERE a.user_id = ?
+  `, [userId]);
+
+  // group by remote panel
+  const grp = {};
+  for (const r of rows) {
+    if (Number(r.is_remote) !== 1) continue;
+    if (!grp[r.panel_id]) grp[r.panel_id] = { panel: r, inboundRemoteIds: [] };
+    if (r.remote_inbound_id) grp[r.panel_id].inboundRemoteIds.push(Number(r.remote_inbound_id));
+  }
+
+  for (const panelId of Object.keys(grp)) {
+    const { panel, inboundRemoteIds } = grp[panelId];
+
+    let remoteUserId = null;
+    try {
+      const create = await remoteCall(panel, 'POST', '/agent/users', {
+        username: user.username,
+        uuid: user.uuid
+      });
+      remoteUserId = Number(create.remote_user_id || create.id);
+    } catch (e) {
+      const find = await remoteCall(panel, 'GET', `/agent/users/find?uuid=${encodeURIComponent(user.uuid)}`);
+      remoteUserId = Number(find.remote_user_id || find.id);
+    }
+
+    await remoteCall(panel, 'PATCH', `/agent/users/${remoteUserId}/inbounds`, {
+      inboundIds: inboundRemoteIds
+    });
+  }
+}
+
 // =========================
-// AGENT APIs (remote side)
+// AGENT APIs
 // =========================
 if (isAgentEnabled()) {
-  // Health
   app.get('/agent/health', requireAgent, (req, res) => {
     res.json({ ok: true, role: NODE_ROLE });
   });
 
-  // find user by uuid (for upsert from master)
   app.get('/agent/users/find', requireAgent, async (req, res) => {
     try {
       const uuid = String(req.query.uuid || '').trim();
@@ -520,12 +570,9 @@ if (isAgentEnabled()) {
       if (!row) return res.status(404).json({ error: 'not found' });
 
       res.json({ success: true, remote_user_id: row.id, ...row });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // create inbound on this node
   app.post('/agent/inbounds', requireAgent, async (req, res) => {
     try {
       let { tag, port, protocol, host, path, tls, fp, alpn } = req.body;
@@ -540,63 +587,42 @@ if (isAgentEnabled()) {
       path = normalizePath(path);
       if (alpn === 'h2' || alpn === 'h3') alpn = 'http/1.1';
 
-      // on agent, panel_id can be 1(local virtual panel). ensure exists.
       let localPanel = await dbGet(`SELECT * FROM panels WHERE is_remote = 0 ORDER BY id ASC LIMIT 1`);
       if (!localPanel) {
         const hostGuess = process.env.PUBLIC_HOST || 'localhost';
-        const insPanel = await dbRun(
+        const insP = await dbRun(
           `INSERT INTO panels (name, address, is_remote, api_base, api_key) VALUES (?, ?, 0, '', '')`,
           ['LocalAgentPanel', hostGuess]
         );
-        localPanel = await dbGet(`SELECT * FROM panels WHERE id = ?`, [insPanel.lastID]);
+        localPanel = await dbGet(`SELECT * FROM panels WHERE id = ?`, [insP.lastID]);
       }
 
       const ins = await dbRun(
         `INSERT INTO inbounds (panel_id, tag, port, protocol, host, path, tls, fp, alpn)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          localPanel.id,
-          tag || '',
-          String(port),
-          protocol,
-          String(host).trim(),
-          path,
-          tls || 'none',
-          fp || '',
-          alpn || 'http/1.1'
-        ]
+        [localPanel.id, tag || randomTag('ag'), String(port), protocol, String(host).trim(), path, tls || 'tls', fp || 'chrome', alpn || 'http/1.1']
       );
 
       await regenerateXrayConfigLocalOnly();
       restartXray();
 
       res.json({ success: true, remote_inbound_id: ins.lastID });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // create user on agent
   app.post('/agent/users', requireAgent, async (req, res) => {
     try {
       const { username, uuid } = req.body;
       if (!username || !uuid) return res.status(400).json({ error: 'username and uuid are required' });
 
-      // if exists by uuid, return existing
-      const exists = await dbGet(`SELECT id FROM users WHERE uuid = ?`, [String(uuid).trim()]);
-      if (exists) return res.json({ success: true, remote_user_id: exists.id, existed: true });
+      const ex = await dbGet(`SELECT id FROM users WHERE uuid = ?`, [String(uuid).trim()]);
+      if (ex) return res.json({ success: true, remote_user_id: ex.id, existed: true });
 
-      const ins = await dbRun(
-        `INSERT INTO users (username, uuid) VALUES (?, ?)`,
-        [String(username).trim(), String(uuid).trim()]
-      );
+      const ins = await dbRun(`INSERT INTO users (username, uuid) VALUES (?, ?)`, [String(username).trim(), String(uuid).trim()]);
       res.json({ success: true, remote_user_id: ins.lastID });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  // set access on agent user
   app.patch('/agent/users/:userId/inbounds', requireAgent, async (req, res) => {
     try {
       const userId = Number(req.params.userId);
@@ -605,27 +631,22 @@ if (isAgentEnabled()) {
 
       await dbRun(`DELETE FROM user_inbound_access WHERE user_id = ?`, [userId]);
       for (const id of inboundIds) {
-        await dbRun(
-          `INSERT OR IGNORE INTO user_inbound_access (user_id, inbound_id) VALUES (?, ?)`,
-          [userId, id]
-        );
+        await dbRun(`INSERT OR IGNORE INTO user_inbound_access (user_id, inbound_id) VALUES (?, ?)`, [userId, id]);
       }
 
       await regenerateXrayConfigLocalOnly();
       restartXray();
 
       res.json({ success: true });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 }
 
 // =========================
-// XRAY GENERATION (LOCAL ONLY)
+// XRAY CONFIG (LOCAL PANELS ONLY)
 // =========================
-let hostPathToPortMap = {}; // key host|path -> internalPort
-let pathToPortFallback = {}; // path -> internalPort
+let hostPathToPortMap = {};
+let pathToPortFallback = {};
 let xrayProcess = null;
 
 function updateRouteMaps(routeRows) {
@@ -655,7 +676,6 @@ function getTargetPort(reqLike) {
 }
 
 async function regenerateXrayConfigLocalOnly() {
-  // فقط inbounds پنل‌های local (is_remote=0) که access دارند
   const rows = await dbAll(`
     SELECT
       u.username, u.uuid,
@@ -757,7 +777,7 @@ async function regenerateXrayConfigLocalOnly() {
     ]
   };
 
-  fs.writeFileSync('/tmp/xray-config.json', JSON.stringify(config, null, 2));
+  fs.writeFileSync(XRAY_CONFIG_PATH, JSON.stringify(config, null, 2));
   updateRouteMaps(routeRows);
 }
 
@@ -766,16 +786,16 @@ function restartXray() {
     xrayProcess.kill();
     xrayProcess = null;
   }
-  if (!fs.existsSync('/tmp/xray-config.json')) return;
+  if (!fs.existsSync(XRAY_CONFIG_PATH)) return;
 
-  xrayProcess = spawn('xray', ['-c', '/tmp/xray-config.json']);
+  xrayProcess = spawn(XRAY_BIN, ['-c', XRAY_CONFIG_PATH]);
   xrayProcess.stdout.on('data', d => console.log('XRAY:', d.toString().trim()));
   xrayProcess.stderr.on('data', d => console.error('XRAY ERR:', d.toString().trim()));
   xrayProcess.on('exit', code => console.log('Xray exited with code', code));
 }
 
 // =========================
-// PROXY (LAST)
+// PROXY (LAST ROUTE)
 // =========================
 app.use((req, res) => {
   const targetPort = getTargetPort(req);
@@ -846,7 +866,9 @@ server.on('upgrade', (req, socket, head) => {
       console.log(`✅ Panel running on :${PORT}`);
       console.log(`Role: ${NODE_ROLE}`);
       console.log(`Admin: ${ADMIN_USER}`);
-      if (isAgentEnabled()) console.log(`Agent enabled. AGENT_KEY is set: ${AGENT_KEY !== 'change-me-agent-key'}`);
+      if (isAgentEnabled()) {
+        console.log(`Agent enabled. AGENT_KEY set: ${AGENT_KEY !== 'change-me-agent-key'}`);
+      }
     });
   } catch (e) {
     console.error('Boot error:', e);
