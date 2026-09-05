@@ -9,7 +9,7 @@
 [![Telegram](https://img.shields.io/badge/Telegram-IsatisStackTeam-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://telegram.me/IsatisStackTeam)
 [![YouTube](https://img.shields.io/badge/YouTube-IsatisStackTeam-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@IsatisStack)
 
-### 🌐 [مشاهده آموزش کار با پنل](https://youtu.be/BgWr0Qso8c4)
+### 🌐 [مشاهده آموزش کار با پنل](https://youtu.be/jaYCnAm5Al8?si=qlheDmXF20dOf5oj)
 
 </div>
 
